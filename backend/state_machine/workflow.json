@@ -1,0 +1,394 @@
+{
+  "Comment": "ChangeProof verification workflow. Every state invokes the same Lambda and selects a stage via the injected 'stage' field. ResultPath is used throughout so the state object accumulates into the evidence bundle rather than being replaced. Teardown is reachable from every provisioning failure path. NOT DEPLOYED: Phase 0 authors and validates this definition locally; deploying it requires Phase 1 authorization.",
+  "StartAt": "ParseChange",
+  "States": {
+    "ParseChange": {
+      "Type": "Task",
+      "Resource": "${ChangeProofFunctionArn}",
+      "Parameters": {
+        "stage": "parse_change",
+        "experimentId.$": "$.experimentId",
+        "planPath.$": "$.planPath"
+      },
+      "ResultPath": "$.parsed",
+      "Retry": [
+        {
+          "ErrorEquals": ["Lambda.ServiceException", "Lambda.TooManyRequestsException"],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "FailExperiment"
+        }
+      ],
+      "Next": "ResolveDependencies"
+    },
+
+    "ResolveDependencies": {
+      "Type": "Task",
+      "Resource": "${ChangeProofFunctionArn}",
+      "Parameters": {
+        "stage": "resolve_dependencies",
+        "experimentId.$": "$.experimentId",
+        "planPath.$": "$.planPath"
+      },
+      "ResultPath": "$.dependencies",
+      "Retry": [
+        {
+          "ErrorEquals": ["Lambda.ServiceException", "Lambda.TooManyRequestsException"],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "FailExperiment"
+        }
+      ],
+      "Next": "PredictImpact"
+    },
+
+    "PredictImpact": {
+      "Type": "Task",
+      "Resource": "${ChangeProofFunctionArn}",
+      "Parameters": {
+        "stage": "predict_impact",
+        "experimentId.$": "$.experimentId",
+        "planPath.$": "$.planPath"
+      },
+      "ResultPath": "$.predicted",
+      "Retry": [
+        {
+          "ErrorEquals": ["Lambda.ServiceException", "Lambda.TooManyRequestsException"],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "FailExperiment"
+        }
+      ],
+      "Next": "IsPredictionCritical"
+    },
+
+    "IsPredictionCritical": {
+      "Comment": "A CRITICAL prediction is rejected without spending a test environment on it. Every other severity proceeds to verification, because the prediction is a hypothesis and not the decision.",
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.predicted.prediction.severity",
+          "StringEquals": "CRITICAL",
+          "Next": "RejectWithoutTesting"
+        }
+      ],
+      "Default": "ProvisionTestEnv"
+    },
+
+    "RejectWithoutTesting": {
+      "Type": "Task",
+      "Resource": "${ChangeProofFunctionArn}",
+      "Parameters": {
+        "stage": "store_evidence",
+        "experimentId.$": "$.experimentId",
+        "planPath.$": "$.planPath"
+      },
+      "ResultPath": "$.stored",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "FailExperiment"
+        }
+      ],
+      "Next": "Explain"
+    },
+
+    "ProvisionTestEnv": {
+      "Comment": "Phase 1. Raises PhaseNotAuthorizedError until the user authorizes AWS provisioning.",
+      "Type": "Task",
+      "Resource": "${ChangeProofFunctionArn}",
+      "Parameters": {
+        "stage": "provision_test_env",
+        "experimentId.$": "$.experimentId"
+      },
+      "ResultPath": "$.environment",
+      "TimeoutSeconds": 900,
+      "Retry": [
+        {
+          "ErrorEquals": ["Lambda.ServiceException", "Lambda.TooManyRequestsException"],
+          "IntervalSeconds": 5,
+          "MaxAttempts": 2,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "TeardownAfterFailure"
+        }
+      ],
+      "Next": "ApplyChange"
+    },
+
+    "ApplyChange": {
+      "Type": "Task",
+      "Resource": "${ChangeProofFunctionArn}",
+      "Parameters": {
+        "stage": "apply_change",
+        "experimentId.$": "$.experimentId",
+        "planPath.$": "$.planPath"
+      },
+      "ResultPath": "$.applied",
+      "TimeoutSeconds": 900,
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "TeardownAfterFailure"
+        }
+      ],
+      "Next": "RunWorkload"
+    },
+
+    "RunWorkload": {
+      "Type": "Task",
+      "Resource": "${ChangeProofFunctionArn}",
+      "Parameters": {
+        "stage": "run_workload",
+        "experimentId.$": "$.experimentId",
+        "requestsPerSecond.$": "$.workload.requestsPerSecond",
+        "seconds.$": "$.workload.seconds"
+      },
+      "ResultPath": "$.workloadRun",
+      "TimeoutSeconds": 600,
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "TeardownAfterFailure"
+        }
+      ],
+      "Next": "WaitForMetricSettling"
+    },
+
+    "WaitForMetricSettling": {
+      "Comment": "CloudWatch metrics for the workload window are not immediately complete. Waiting avoids comparing against a partially populated observation.",
+      "Type": "Wait",
+      "Seconds": 120,
+      "Next": "CollectTelemetry"
+    },
+
+    "CollectTelemetry": {
+      "Type": "Task",
+      "Resource": "${ChangeProofFunctionArn}",
+      "Parameters": {
+        "stage": "collect_telemetry",
+        "experimentId.$": "$.experimentId"
+      },
+      "ResultPath": "$.observed",
+      "TimeoutSeconds": 300,
+      "Retry": [
+        {
+          "ErrorEquals": ["Lambda.ServiceException", "States.Timeout"],
+          "IntervalSeconds": 10,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "TeardownAfterFailure"
+        }
+      ],
+      "Next": "TeardownTestEnv"
+    },
+
+    "TeardownTestEnv": {
+      "Comment": "Success path teardown. Runs before comparison so the environment is never held open while evidence is processed.",
+      "Type": "Task",
+      "Resource": "${ChangeProofFunctionArn}",
+      "Parameters": {
+        "stage": "teardown_test_env",
+        "experimentId.$": "$.experimentId"
+      },
+      "ResultPath": "$.teardown",
+      "TimeoutSeconds": 900,
+      "Retry": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "IntervalSeconds": 15,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.teardownError",
+          "Next": "Compare"
+        }
+      ],
+      "Next": "Compare"
+    },
+
+    "TeardownAfterFailure": {
+      "Comment": "Failure path teardown. Every provisioning-stage Catch routes here, so a failed experiment never leaves AWS resources running.",
+      "Type": "Task",
+      "Resource": "${ChangeProofFunctionArn}",
+      "Parameters": {
+        "stage": "teardown_test_env",
+        "experimentId.$": "$.experimentId"
+      },
+      "ResultPath": "$.teardown",
+      "TimeoutSeconds": 900,
+      "Retry": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "IntervalSeconds": 15,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.teardownError",
+          "Next": "FailExperiment"
+        }
+      ],
+      "Next": "FailExperiment"
+    },
+
+    "Compare": {
+      "Type": "Task",
+      "Resource": "${ChangeProofFunctionArn}",
+      "Parameters": {
+        "stage": "compare",
+        "experimentId.$": "$.experimentId",
+        "planPath.$": "$.planPath"
+      },
+      "ResultPath": "$.compared",
+      "Retry": [
+        {
+          "ErrorEquals": ["Lambda.ServiceException", "Lambda.TooManyRequestsException"],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "FailExperiment"
+        }
+      ],
+      "Next": "StoreEvidence"
+    },
+
+    "StoreEvidence": {
+      "Comment": "Evidence is stored before the explanation is generated, so the verdict is durable whether or not the explainer succeeds.",
+      "Type": "Task",
+      "Resource": "${ChangeProofFunctionArn}",
+      "Parameters": {
+        "stage": "store_evidence",
+        "experimentId.$": "$.experimentId",
+        "planPath.$": "$.planPath"
+      },
+      "ResultPath": "$.stored",
+      "Retry": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "IntervalSeconds": 5,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "FailExperiment"
+        }
+      ],
+      "Next": "Explain"
+    },
+
+    "Explain": {
+      "Comment": "Explanation only. A failure here degrades the report but must never change the verdict, so it catches to ReportResult rather than to FailExperiment.",
+      "Type": "Task",
+      "Resource": "${ChangeProofFunctionArn}",
+      "Parameters": {
+        "stage": "explain",
+        "experimentId.$": "$.experimentId",
+        "planPath.$": "$.planPath"
+      },
+      "ResultPath": "$.explained",
+      "TimeoutSeconds": 120,
+      "Retry": [
+        {
+          "ErrorEquals": ["Lambda.ServiceException"],
+          "IntervalSeconds": 5,
+          "MaxAttempts": 2,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.explanationError",
+          "Next": "ReportResult"
+        }
+      ],
+      "Next": "ReportResult"
+    },
+
+    "ReportResult": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.compared.comparison.verdict",
+          "StringEquals": "APPROVE",
+          "Next": "Approved"
+        },
+        {
+          "Variable": "$.compared.comparison.verdict",
+          "StringEquals": "REJECT",
+          "Next": "Rejected"
+        }
+      ],
+      "Default": "Rejected"
+    },
+
+    "Approved": {
+      "Type": "Succeed",
+      "Comment": "Observed behaviour stayed within every safety limit."
+    },
+
+    "Rejected": {
+      "Comment": "A rejection is a successful verification with a negative result, not a workflow failure. It terminates as Succeed so the evidence and explanation remain the output.",
+      "Type": "Succeed"
+    },
+
+    "FailExperiment": {
+      "Type": "Fail",
+      "Error": "ChangeProofExperimentFailed",
+      "Cause": "The verification workflow could not complete. See $.error in the execution history."
+    }
+  }
+}

@@ -1,0 +1,58 @@
+{
+  "$fixture": "TEST FIXTURE - hand-authored. Not discovered from any AWS account.",
+  "$description": "Dependency graph for the demo target stack in terraform/. Mirrors what Neptune will hold once Phase 1 populates it from AWS Config and X-Ray.",
+  "$propagation": "Per-edge factor in (0, 1] describing how much upstream concurrency pressure reaches the target. 1.0 passes pressure through undiminished. These are modelling assumptions, to be recalibrated against real predicted-vs-actual data.",
+  "nodes": [
+    {
+      "address": "aws_lambda_function.api",
+      "resourceType": "aws_lambda_function",
+      "attributes": {
+        "role": "request handler",
+        "reserved_concurrent_executions": 10
+      }
+    },
+    {
+      "address": "aws_sqs_queue.work",
+      "resourceType": "aws_sqs_queue",
+      "attributes": {
+        "role": "work buffer between the api and the worker"
+      }
+    },
+    {
+      "address": "aws_lambda_function.worker",
+      "resourceType": "aws_lambda_function",
+      "attributes": {
+        "role": "queue consumer",
+        "reserved_concurrent_executions": 5
+      }
+    },
+    {
+      "address": "aws_dynamodb_table.orders",
+      "resourceType": "aws_dynamodb_table",
+      "attributes": {
+        "role": "terminal datastore",
+        "billing_mode": "PAY_PER_REQUEST"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "source": "aws_lambda_function.api",
+      "target": "aws_sqs_queue.work",
+      "relation": "writes_to",
+      "propagation": 0.9
+    },
+    {
+      "source": "aws_sqs_queue.work",
+      "target": "aws_lambda_function.worker",
+      "relation": "triggers",
+      "propagation": 0.95
+    },
+    {
+      "source": "aws_lambda_function.worker",
+      "target": "aws_dynamodb_table.orders",
+      "relation": "writes_to",
+      "propagation": 0.8
+    }
+  ]
+}

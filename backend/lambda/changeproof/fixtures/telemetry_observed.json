@@ -1,0 +1,99 @@
+{
+  "$fixture": "TEST FIXTURE - SIMULATED TELEMETRY. These numbers were hand-authored to exercise the comparison engine. They were NOT measured by CloudWatch and describe no real AWS infrastructure.",
+  "$scenario": "Demo change: aws_lambda_function.api reserved_concurrent_executions 10 -> 100. The api scales as intended, but aws_lambda_function.worker stays capped at 5 reserved concurrency, so the queue backs up and DynamoDB write latency climbs.",
+  "$replacedBy": "adapters.aws.CloudWatchTelemetrySource in Phase 1, which returns Observation(simulated=False).",
+  "$baseline": "baselineValue is the pre-change steady state; observedValue is the same metric under synthetic workload after the change.",
+  "metrics": [
+    {
+      "resourceAddress": "aws_lambda_function.api",
+      "metric": "ConcurrentExecutions",
+      "unit": "Count",
+      "baselineValue": 9,
+      "observedValue": 94
+    },
+    {
+      "resourceAddress": "aws_lambda_function.api",
+      "metric": "Duration",
+      "unit": "Milliseconds",
+      "baselineValue": 120,
+      "observedValue": 180
+    },
+    {
+      "resourceAddress": "aws_lambda_function.api",
+      "metric": "Throttles",
+      "unit": "Count",
+      "baselineValue": 0,
+      "observedValue": 0
+    },
+    {
+      "resourceAddress": "aws_lambda_function.api",
+      "metric": "Errors",
+      "unit": "Count",
+      "baselineValue": 0,
+      "observedValue": 0
+    },
+    {
+      "resourceAddress": "aws_sqs_queue.work",
+      "metric": "ApproximateNumberOfMessagesVisible",
+      "unit": "Count",
+      "baselineValue": 200,
+      "observedValue": 2680
+    },
+    {
+      "resourceAddress": "aws_sqs_queue.work",
+      "metric": "ApproximateAgeOfOldestMessage",
+      "unit": "Seconds",
+      "baselineValue": 4,
+      "observedValue": 46
+    },
+    {
+      "resourceAddress": "aws_lambda_function.worker",
+      "metric": "ConcurrentExecutions",
+      "unit": "Count",
+      "baselineValue": 5,
+      "observedValue": 5
+    },
+    {
+      "resourceAddress": "aws_lambda_function.worker",
+      "metric": "Duration",
+      "unit": "Milliseconds",
+      "baselineValue": 210,
+      "observedValue": 240
+    },
+    {
+      "resourceAddress": "aws_lambda_function.worker",
+      "metric": "Throttles",
+      "unit": "Count",
+      "baselineValue": 0,
+      "observedValue": 1840
+    },
+    {
+      "resourceAddress": "aws_lambda_function.worker",
+      "metric": "Errors",
+      "unit": "Count",
+      "baselineValue": 0,
+      "observedValue": 0
+    },
+    {
+      "resourceAddress": "aws_dynamodb_table.orders",
+      "metric": "ConsumedWriteCapacityUnits",
+      "unit": "Count",
+      "baselineValue": 45,
+      "observedValue": 196
+    },
+    {
+      "resourceAddress": "aws_dynamodb_table.orders",
+      "metric": "ThrottledRequests",
+      "unit": "Count",
+      "baselineValue": 0,
+      "observedValue": 0
+    },
+    {
+      "resourceAddress": "aws_dynamodb_table.orders",
+      "metric": "SuccessfulRequestLatency",
+      "unit": "Milliseconds",
+      "baselineValue": 12,
+      "observedValue": 58
+    }
+  ]
+}

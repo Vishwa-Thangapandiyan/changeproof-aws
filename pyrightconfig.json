@@ -1,0 +1,7 @@
+{
+  "include": ["backend"],
+  "extraPaths": ["backend/lambda"],
+  "pythonVersion": "3.13",
+  "typeCheckingMode": "standard",
+  "reportMissingImports": "error"
+}
