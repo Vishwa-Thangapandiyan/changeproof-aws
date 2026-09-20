@@ -103,6 +103,7 @@ class ExperimentEnvironment:
     state_path: str
     resources: tuple[ResourceIdentity, ...]
     configuration: dict[str, int]
+    dlq_url: str | None = None
     created_at: datetime = field(default_factory=utc_now)
 
     def resource(self, graph_address: str) -> ResourceIdentity:
@@ -120,6 +121,7 @@ class ExperimentEnvironment:
             "statePath": self.state_path,
             "configuration": dict(self.configuration),
             "createdAt": iso(self.created_at),
+            "deadLetterQueueUrl": self.dlq_url,
             "resources": [resource.to_dict() for resource in self.resources],
         }
 
@@ -184,13 +186,27 @@ class WorkloadResult:
     achieved_rate: float
     slowest_attempt_ms: float
 
+    @property
+    def delivered_rate(self) -> float:
+        """Messages that actually reached the queue, per second.
+
+        The offered rate and the delivered rate are different numbers, and the gap
+        between them *is* the effect of the concurrency cap. Recording only the
+        offered rate would hide it; recording only the delivered rate would hide
+        that both runs were driven identically.
+        """
+        if self.attempted <= 0:
+            return 0.0
+        return self.achieved_rate * (self.accepted / self.attempted)
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "attempted": self.attempted,
             "accepted": self.accepted,
             "throttled": self.throttled,
             "failed": self.failed,
-            "achievedRatePerSecond": round(self.achieved_rate, 3),
+            "offeredRatePerSecond": round(self.achieved_rate, 3),
+            "deliveredRatePerSecond": round(self.delivered_rate, 3),
             "slowestAttemptMs": round(self.slowest_attempt_ms, 1),
         }
 
@@ -211,6 +227,7 @@ class RunRecord:
     window_start: datetime
     window_end: datetime
     drained: bool
+    dlq_depth: int = 0
     notes: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
@@ -234,6 +251,7 @@ class RunRecord:
                 "endEpoch": epoch(self.window_end),
             },
             "drained": self.drained,
+            "dlqDepth": self.dlq_depth,
             "notes": list(self.notes),
         }
 
@@ -276,6 +294,7 @@ def comparability(baseline: RunRecord, changed: RunRecord) -> dict[str, Any]:
         "workloadFingerprintMatch": baseline.spec.fingerprint() == changed.spec.fingerprint(),
         "attemptDeltaPct": round(attempt_delta, 3),
         "bothRunsDrained": baseline.drained and changed.drained,
+        "deadLetters": {"baseline": baseline.dlq_depth, "changed": changed.dlq_depth},
         "configurationDeltaKeys": differing,
         "singleVariable": len(differing) == 1,
         "order": [record.label for record in sorted((baseline, changed), key=lambda run: run.started_at)],

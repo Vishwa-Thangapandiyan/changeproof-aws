@@ -301,3 +301,76 @@ def test_baseline_first_reports_its_own_execution_order():
     baseline, changed = driver.run_both()
 
     assert comparability(baseline, changed)["order"] == ["baseline", "changed"]
+
+
+# --- a drained queue is not the same as a successful run -----------------------------
+
+
+def test_dead_letters_are_reported_not_absorbed():
+    """Messages that failed three times leave the queue, so the drain gate passes."""
+
+    class WithDeadLetters(ExperimentDriver):
+        def _invoker(self, function_name):
+            return lambda payload: "accepted"
+
+        def _probe(self, queue):
+            return FakeProbe()
+
+        def _dlq_probe(self, environment):
+            class Dlq:
+                def depth(self):
+                    return (7, 0)
+
+            return Dlq()
+
+    driver, terraform, _ = driver_with_fakes()
+    poisoned = WithDeadLetters(
+        experiment_id="EXP-1",
+        spec=driver.spec,
+        settle_seconds=0,
+        sleep=lambda _: None,
+    )
+    poisoned._terraform = terraform
+    poisoned.environment = driver.environment
+
+    record = poisoned.run_baseline()
+
+    assert record.drained is True
+    assert record.dlq_depth == 7
+    assert any("dead letter queue" in note for note in record.notes)
+
+
+def test_offered_and_delivered_rates_are_reported_separately():
+    """The gap between them is the effect of the concurrency cap."""
+
+    class HalfThrottled(ExperimentDriver):
+        def _invoker(self, function_name):
+            state = {"n": 0}
+
+            def invoke(payload):
+                state["n"] += 1
+                return "accepted" if state["n"] % 2 else "throttled"
+
+            return invoke
+
+        def _probe(self, queue):
+            return FakeProbe()
+
+    driver, terraform, _ = driver_with_fakes()
+    half = HalfThrottled(
+        experiment_id="EXP-1",
+        spec=WorkloadSpec(attempts=10, duration_seconds=0, warmup_attempts=0, client_concurrency=1),
+        settle_seconds=0,
+        sleep=lambda _: None,
+    )
+    half._terraform = terraform
+    half.environment = driver.environment
+
+    record = half.run_baseline()
+
+    assert record.result.attempted == 10
+    assert record.result.accepted == 5
+    assert record.result.delivered_rate == pytest.approx(record.result.achieved_rate * 0.5)
+
+    document = record.to_dict()["result"]
+    assert document["offeredRatePerSecond"] > document["deliveredRatePerSecond"]

@@ -329,23 +329,45 @@ The agreed end-to-end workflow, confirmed by the team:
 > configurations in AWS -> collect actual metrics -> produce and store an
 > approve/reject verdict.
 
-| Area | Owner | Scope |
-|---|---|---|
-| Test infrastructure and workload | Praanesh | Delivered in `workload/`: deployable stack, producer and consumer, baseline and change runs, cleanup. Publishes resource names and measurement windows. Never yet applied to an account. |
-| Pipeline and function integration | Vishwa | Stage wiring, Step Functions integration, the pipeline contract between stages |
-| CloudWatch telemetry | unassigned | Metric collection for both runs, against the published names and timestamps |
-| Experiment records | Varun | S3 evidence artifacts and the DynamoDB experiment schema |
+| Area | Owner | Branch | Finished when |
+|---|---|---|---|
+| Test infrastructure and workload | Praanesh | `feat/test-environment` | The app processes messages, both configurations can be exercised, and the resources can be destroyed |
+| Pipeline and Step Functions integration | Vishwa | `feat/aws-pipeline` | One execution produces a verdict derived from real measurements, with failure handling and cleanup |
+| CloudWatch telemetry | Sanjay | `feat/cloudwatch-telemetry` | `CloudWatchTelemetrySource` returns a valid `Observation` with `simulated=False` |
+| S3 evidence and DynamoDB records | Varun | `feat/evidence-storage` | An experiment's evidence survives process exit and can be retrieved by id |
+
+Vishwa owns the shared files — `models.py`, `handler.py`, `workflow.json`. Everyone
+else works in their own adapter file. One infrastructure owner per Terraform
+directory and state; no simultaneous applies against the same state.
+
+The two-day target is **one real experiment**, not the architecture:
+
+> Submit a Terraform change -> predict impact -> test baseline and changed
+> configurations in AWS -> collect actual metrics -> produce and store an
+> approve/reject verdict.
+
+Scope correction worth repeating: the immediate goal is **testing before
+production, inside an isolated environment**. Incident reconstruction (backward
+mode) and automatically improving prediction accuracy are future capabilities, not
+this week's.
+
+A passing offline suite is evidence that the core works. It is not evidence that AWS
+integration is nearly done.
 
 The interface between infrastructure and telemetry is deliberately narrow: the workload
 run publishes **resource names and measurement timestamps**, and telemetry collection
 reads only those. Anything else is coupling. The concrete shape is the experiment
 manifest documented in `workload/README.md` sections 9 and 10; query `metricWindow`,
-not the raw timestamps.
+not the raw timestamps. `architecture/telemetry-contract.md` is the full contract,
+including the metric/statistic table still to be ratified.
 
 Neptune and Bedrock are explicitly post-core work, by team agreement and by the cost
 rule in section 6. Do not start either until the baseline-vs-change loop is working.
 
-Open item: the DynamoDB table and attribute list is owed to the experiment-records
-owner. It should be derived from the evidence bundle the pipeline already produces
-(experiment id, phase, change summary, prediction, observed metrics, breaches,
-prediction accuracy, verdict) rather than designed independently.
+Two documents exist for the interfaces between these areas, both drafts open to
+revision by the owner of the area they describe:
+
+- `architecture/telemetry-contract.md` — what the driver publishes, the address
+  mapping, the proposed statistics, and how missing data must be handled
+- `architecture/experiment-records.md` — the proposed DynamoDB schema and S3 layout,
+  derived from the evidence bundle the engine already emits

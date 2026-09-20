@@ -273,6 +273,13 @@ environment variable someone exported once and forgot is not consent.
 
 Tests: `python -m pytest workload/tests -q` — no credentials, no Terraform CLI.
 
+`--activation-wait` (default 120s) idles after provisioning so CloudWatch starts
+publishing for the new queue before the first run is measured. AWS documents a delay
+of up to 15 minutes when a queue is activated from an inactive state, and every
+experiment creates a brand new queue, so this lands on the baseline run. The driver
+also sends a handful of activation messages at provisioning time to start that clock
+early. See `architecture/telemetry-contract.md` section 6.
+
 ## Known confounds
 
 Stated because they affect how much the evidence is worth:
@@ -288,6 +295,10 @@ Stated because they affect how much the evidence is worth:
   a fresh table per run would be a second variable (cold partitions). Items are keyed
   by `runId`.
 - **`terraform apply` has never been run.** First deployment is unverified.
+- **A 60-second run yields very few datapoints.** SQS publishes at one-minute
+  intervals, so the default window produces one or two points per metric. Consider
+  `--duration 300` for the runs that matter; the demo default trades resolution for
+  wall-clock time.
 
 ## Not implemented
 

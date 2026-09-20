@@ -45,6 +45,7 @@ def _driver(args: argparse.Namespace) -> ExperimentDriver:
         order=args.order,
         repo_root=REPO_ROOT,
         settle_seconds=args.settle,
+        activation_wait_seconds=args.activation_wait,
     )
 
 
@@ -165,6 +166,13 @@ def build_parser() -> argparse.ArgumentParser:
         target.add_argument("--changed-concurrency", type=int, default=100)
         target.add_argument("--worker-concurrency", type=int, default=5)
         target.add_argument("--settle", type=int, default=60, help="idle seconds between runs")
+        target.add_argument(
+            "--activation-wait",
+            type=int,
+            default=120,
+            help="idle seconds after provisioning, so CloudWatch starts publishing for the new queue "
+            "before the first run is measured. AWS documents a delay of up to 15 minutes here.",
+        )
         target.add_argument(
             "--order",
             choices=["baseline-first", "changed-first"],

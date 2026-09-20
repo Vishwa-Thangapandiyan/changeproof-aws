@@ -57,6 +57,17 @@ DRAIN_POLL_SECONDS = 5
 DRAIN_TIMEOUT_SECONDS = 300
 SETTLE_SECONDS = 60
 
+#: Messages sent immediately after provisioning, purely to wake the queue up.
+#:
+#: SQS publishes metrics only for queues CloudWatch considers *active*, and the docs
+#: warn of "a delay of up to 15 minutes ... when a queue is activated from an inactive
+#: state". A queue created seconds before the baseline run is exactly that case, so
+#: the first run is the one at risk of returning no datapoints at all. Activating at
+#: provisioning time starts that clock as early as possible instead of at the moment
+#: measurement begins.
+ACTIVATION_ATTEMPTS = 5
+ACTIVATION_WAIT_SECONDS = 120
+
 
 @dataclass
 class ExperimentDriver:
@@ -71,6 +82,7 @@ class ExperimentDriver:
     order: str = "baseline-first"
     repo_root: Path = field(default_factory=lambda: Path(__file__).resolve().parents[2])
     settle_seconds: int = SETTLE_SECONDS
+    activation_wait_seconds: int = ACTIVATION_WAIT_SECONDS
     drain_timeout_seconds: int = DRAIN_TIMEOUT_SECONDS
     sleep: Callable[[float], None] = time.sleep
 
@@ -97,12 +109,32 @@ class ExperimentDriver:
             terraform_dir=str(working),
             state_path=str(terraform.state_path),
             resources=_identities(outputs),
+            dlq_url=outputs.get("work_dlq_url"),
             configuration={
                 "reserved_concurrency": self.first_concurrency,
                 "worker_concurrency": self.worker_concurrency,
             },
         )
+        self._activate_queue()
         return self.environment
+
+    def _activate_queue(self) -> None:
+        """Wake the queue so CloudWatch starts publishing before the first run.
+
+        Cheap insurance: a handful of messages, then an idle wait. Without it the
+        baseline run can legitimately return an empty metric series, which is
+        indistinguishable from a baseline of zero unless someone knows to look.
+        """
+        environment = self.environment
+        if environment is None:
+            return
+
+        invoke = self._invoker(environment.resource(CHANGE_ADDRESS).physical_name)
+        for index in range(ACTIVATION_ATTEMPTS):
+            invoke({"runId": f"{self.experiment_id}-activation", "seq": index, "payloadBytes": 64})
+
+        self._drain(environment)
+        self.sleep(self.activation_wait_seconds)
 
     @property
     def first_concurrency(self) -> int:
@@ -214,6 +246,12 @@ class ExperimentDriver:
         attempts_ended_at = wall_start + timedelta(seconds=measured_to - monotonic_start)
 
         drained, drained_at = self._drain(environment)
+        dlq_depth = self._dead_letters(environment)
+        if dlq_depth:
+            notes.append(
+                f"{dlq_depth} message(s) in the dead letter queue: they failed processing three times "
+                "and never reached DynamoDB. Downstream metrics understate the work that was offered."
+            )
         if not drained:
             notes.append(
                 f"queue did not reach zero within {self.drain_timeout_seconds}s; "
@@ -238,12 +276,27 @@ class ExperimentDriver:
             window_start=_floor_minute(attempts_started_at),
             window_end=_ceil_minute(drained_at + timedelta(seconds=WINDOW_TAIL_SECONDS)),
             drained=drained,
+            dlq_depth=dlq_depth,
             notes=tuple(notes),
         )
 
         # Leave the environment idle and empty for whatever runs next.
         self.sleep(self.settle_seconds)
         return record
+
+    def _dead_letters(self, environment: ExperimentEnvironment) -> int:
+        """How many messages failed processing outright.
+
+        A drained queue is not the same as a successful run: messages that failed
+        three times leave the queue for the DLQ, so the drain gate passes while work
+        has silently gone missing. A run with dead letters is still reportable, but
+        the comparison has to say so.
+        """
+        probe = self._dlq_probe(environment)
+        if probe is None:
+            return 0
+        visible, in_flight = probe.depth()
+        return visible + in_flight
 
     def _drain(self, environment: ExperimentEnvironment) -> tuple[bool, datetime]:
         """Wait until the queue is empty and nothing is in flight.
@@ -280,6 +333,13 @@ class ExperimentDriver:
         if not queue.queue_url:
             return None
         return QueueProbe(queue_url=queue.queue_url, region=self.region)
+
+    def _dlq_probe(self, environment: ExperimentEnvironment):
+        from .awsio import QueueProbe
+
+        if not environment.dlq_url:
+            return None
+        return QueueProbe(queue_url=environment.dlq_url, region=self.region)
 
     # --- helpers ---------------------------------------------------------------------
 
