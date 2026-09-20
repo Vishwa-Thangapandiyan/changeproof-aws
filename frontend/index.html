@@ -1,0 +1,841 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ChangeProof</title>
+<meta name="description" content="Prove an infrastructure change before it ships. Prediction versus measured reality, with a verdict.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,800&family=Hanken+Grotesk:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#E9EEF2; --paper-2:#DCE4EA; --panel:#F6F9FB; --ink:#0D1B26; --ink-2:#4A5B68; --line:#BCC8D1;
+  --blue:#2440F5; --blue-soft:rgba(36,64,245,.16); --red:#E3342F; --red-soft:rgba(227,52,47,.12);
+  --green:#0E8F6E; --amber:#A66A00; --amber-soft:rgba(201,138,0,.16); --ondark:#F6F9FB;
+  --display:"Bricolage Grotesque","Helvetica Neue",Arial,sans-serif;
+  --body:"Hanken Grotesk","Helvetica Neue",Arial,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#0A1118; --paper-2:#101B25; --panel:#0F1A24; --ink:#E6EDF3; --ink-2:#8DA0AF; --line:#22323F;
+    --blue:#7B8DFF; --blue-soft:rgba(123,141,255,.20); --red:#FF6A62; --red-soft:rgba(255,106,98,.14);
+    --green:#3DD6A6; --amber:#F0B540; --amber-soft:rgba(240,181,64,.16); --ondark:#0A1118;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0A1118; --paper-2:#101B25; --panel:#0F1A24; --ink:#E6EDF3; --ink-2:#8DA0AF; --line:#22323F;
+  --blue:#7B8DFF; --blue-soft:rgba(123,141,255,.20); --red:#FF6A62; --red-soft:rgba(255,106,98,.14);
+  --green:#3DD6A6; --amber:#F0B540; --amber-soft:rgba(240,181,64,.16); --ondark:#0A1118;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--paper);color:var(--ink);font:400 16px/1.55 var(--body);-webkit-font-smoothing:antialiased;overflow-x:hidden}
+a{color:inherit}
+:focus-visible{outline:2px solid var(--blue);outline-offset:3px}
+.wrap{max-width:1240px;margin-inline:auto;padding-inline:clamp(16px,4vw,48px)}
+.mono{font-family:var(--mono)}
+.eyebrow{font:500 12px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--ink-2)}
+
+/* nav */
+.nav{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:color-mix(in srgb,var(--paper) 88%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.nav .wrap{display:flex;align-items:center;gap:16px;height:60px}
+.brand{font:800 20px/1 var(--display);letter-spacing:-.02em;text-decoration:none;display:flex;align-items:center;gap:10px}
+.brand i{width:14px;height:14px;border:2.5px solid var(--ink);border-radius:50%;position:relative;display:inline-block}
+.brand i::after{content:"";position:absolute;inset:2px;background:var(--red);border-radius:50%}
+.nav nav{margin-left:auto;display:flex;gap:22px;font:500 13px var(--mono)}
+.nav nav a{text-decoration:none;color:var(--ink-2);padding:6px 0;background:linear-gradient(var(--ink),var(--ink)) 0 100%/0 1.5px no-repeat;transition:background-size .3s,color .2s}
+.nav nav a:hover{color:var(--ink);background-size:100% 1.5px}
+.toggle{border:1px solid var(--line);background:var(--panel);color:var(--ink);font:500 12px var(--mono);padding:8px 12px;border-radius:999px;cursor:pointer}
+.toggle:hover{border-color:var(--ink)}
+.sim{background:var(--amber-soft);border-bottom:1px solid var(--line);color:var(--ink)}
+.sim .wrap{display:flex;gap:12px;align-items:center;padding-block:9px;font:500 12px/1.4 var(--mono)}
+.sim b{color:var(--amber);letter-spacing:.1em}
+@media(max-width:760px){.nav nav{display:none}.toggle{margin-left:auto}}
+
+/* hero */
+.hero{padding-block:clamp(36px,6vw,80px) 0}
+.hero-grid{display:grid;grid-template-columns:1.05fr .95fr;gap:clamp(24px,4vw,56px);align-items:end}
+.hero h1{font:800 clamp(3rem,8.4vw,7.6rem)/.92 var(--display);letter-spacing:-.045em;margin:18px 0 0;text-wrap:balance}
+.hero h1 .prove{color:var(--blue);position:relative;display:inline-block}
+.hero h1 .prove svg{position:absolute;left:-2%;bottom:-.06em;width:104%;height:.2em;overflow:visible}
+.hero h1 .prove path{fill:none;stroke:var(--red);stroke-width:7;stroke-linecap:round;stroke-dasharray:1;stroke-dashoffset:0}
+.lede{max-width:52ch;color:var(--ink-2);font-size:clamp(1rem,1.5vw,1.2rem);margin:26px 0 0}
+.exp{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;margin-top:28px}
+.chip{font:500 12px/1 var(--mono);border:1px solid var(--line);border-radius:999px;padding:9px 12px;background:var(--panel)}
+.chip.rej{background:var(--red);border-color:var(--red);color:var(--ondark);letter-spacing:.1em}
+.graph{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:6px;aspect-ratio:1/.86;min-height:320px}
+.graph canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.graph .cap{position:absolute;left:14px;top:12px}
+.graph .cap2{position:absolute;right:14px;bottom:12px;font:500 11px var(--mono);color:var(--ink-2)}
+@media(max-width:900px){.hero-grid{grid-template-columns:1fr}}
+
+/* marquee */
+.marquee{margin-top:clamp(36px,6vw,72px);border-block:1px solid var(--ink);background:var(--ink);color:var(--ondark);overflow:hidden}
+.track{display:flex;width:max-content;animation:slide 60s linear infinite}
+.track span{font:500 13px/1 var(--mono);padding:14px 26px;white-space:nowrap;letter-spacing:.02em}
+.track b{color:var(--red);font-weight:600}
+@keyframes slide{to{transform:translateX(-50%)}}
+
+/* sections */
+section{padding-block:clamp(56px,9vw,120px)}
+.head{display:grid;grid-template-columns:200px 1fr;gap:24px;margin-bottom:clamp(28px,4vw,52px)}
+.head h2{font:800 clamp(2rem,4.6vw,4rem)/1 var(--display);letter-spacing:-.035em;margin:0;text-wrap:balance;max-width:20ch}
+.head p{color:var(--ink-2);max-width:60ch;margin:16px 0 0}
+@media(max-width:760px){.head{grid-template-columns:1fr;gap:12px}}
+
+/* change */
+.diff{display:grid;grid-template-columns:1.2fr 1fr;gap:clamp(20px,3vw,40px)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:clamp(18px,2.4vw,32px)}
+.attr{font:500 13px var(--mono);color:var(--ink-2)}
+.roll{display:flex;align-items:baseline;gap:clamp(12px,3vw,32px);margin-top:14px;flex-wrap:wrap}
+.roll .n{font:800 clamp(4rem,11vw,9rem)/.9 var(--display);letter-spacing:-.05em;font-variant-numeric:tabular-nums}
+.roll .n.from{color:var(--ink-2)}
+.roll .arrow{font:500 clamp(2rem,5vw,4rem)/1 var(--display);color:var(--red)}
+.mult{display:inline-block;margin-top:18px;font:600 13px var(--mono);background:var(--red-soft);color:var(--red);padding:8px 12px;border-radius:4px}
+.rule{margin:0;font-size:15px;color:var(--ink-2)}
+.rule code{font:500 12px var(--mono);color:var(--ink)}
+.scale{margin-top:22px}
+.scale .bar{display:flex;height:34px;border-radius:4px;overflow:hidden;border:1px solid var(--line)}
+.scale .seg{display:flex;align-items:center;padding-left:8px;font:500 11px var(--mono);color:var(--ink)}
+.scale .seg.on{color:var(--ondark);font-weight:600}
+.scale .pin{position:relative;height:30px}
+.scale .pin i{position:absolute;top:0;width:2px;height:16px;background:var(--ink)}
+.scale .pin em{position:absolute;top:16px;font:600 11px var(--mono);font-style:normal;white-space:nowrap;transform:translateX(-50%)}
+@media(max-width:900px){.diff{grid-template-columns:1fr}}
+
+/* proof rows */
+.filters{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px}
+.filters button{font:500 12px var(--mono);border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:9px 14px;border-radius:999px;cursor:pointer}
+.filters button[aria-pressed="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.legend{display:flex;flex-wrap:wrap;gap:18px;font:500 12px var(--mono);color:var(--ink-2);margin:0 0 14px}
+.legend span{display:inline-flex;align-items:center;gap:8px}
+.legend .k1{width:26px;height:10px;background:var(--blue-soft);border:1px solid var(--blue)}
+.legend .k2{width:10px;height:10px;background:var(--ink);border-radius:50%}
+.legend .k3{width:2px;height:14px;background:var(--red)}
+.rows{border-top:1px solid var(--ink)}
+.row{display:grid;grid-template-columns:minmax(200px,300px) 1fr 150px;gap:20px;align-items:center;padding:16px 4px;border-bottom:1px solid var(--line);position:relative}
+.row:hover{background:var(--paper-2)}
+.row .who{min-width:0}
+.row .who b{display:block;font:600 13px/1.25 var(--mono);overflow-wrap:anywhere}
+.row .who small{font:400 12px var(--mono);color:var(--ink-2)}
+.lane{position:relative;height:38px}
+.lane::before{content:"";position:absolute;left:0;right:0;top:50%;height:1px;background:var(--line)}
+.lane .tick{position:absolute;top:0;bottom:0;width:1px;background:var(--line)}
+.lane .tick em{position:absolute;top:100%;left:0;transform:translateX(-50%);font:400 10px var(--mono);font-style:normal;color:var(--ink-2);display:none}
+.rows .row:first-child .lane .tick em{display:block;top:auto;bottom:100%;margin-bottom:3px}
+.lane .band{position:absolute;top:8px;bottom:8px;background:var(--blue-soft);border:1px solid var(--blue);border-radius:2px;transform-origin:left}
+.lane .lim{position:absolute;top:2px;bottom:2px;width:2px;background:var(--red)}
+.lane .dot{position:absolute;top:50%;width:16px;height:16px;margin:-8px 0 0 -8px;border-radius:50%;background:var(--ink);border:3px solid var(--paper);box-shadow:0 0 0 1px var(--ink)}
+.lane .dot.bad{background:var(--red);box-shadow:0 0 0 1px var(--red)}
+.lane .dot.good{background:var(--green);box-shadow:0 0 0 1px var(--green)}
+.lane .off{position:absolute;right:calc(3% + 14px);top:50%;transform:translateY(-50%);font:600 10px var(--mono);letter-spacing:.08em;color:var(--red);text-transform:uppercase}
+.val{text-align:right}
+.val b{display:block;font:600 20px/1 var(--mono);font-variant-numeric:tabular-nums}
+.val small{display:block;margin-top:6px;font:500 11px/1.3 var(--mono);color:var(--ink-2)}
+.pill{display:inline-block;font:600 10px/1 var(--mono);letter-spacing:.08em;padding:5px 7px;border-radius:3px;margin-top:6px}
+.pill.worse{background:var(--red-soft);color:var(--red)}
+.pill.within{background:var(--blue-soft);color:var(--blue)}
+.pill.better{background:rgba(14,143,110,.16);color:var(--green)}
+.pill.none{background:var(--paper-2);color:var(--ink-2)}
+.pill.breach{background:var(--red);color:var(--ondark)}
+@media(max-width:820px){.row{grid-template-columns:1fr;gap:10px}.val{text-align:left;display:flex;gap:12px;align-items:baseline;flex-wrap:wrap}.val small,.pill{margin-top:0}}
+.tip{position:fixed;z-index:50;pointer-events:none;background:var(--ink);color:var(--paper);font:500 12px/1.5 var(--mono);padding:10px 12px;border-radius:4px;max-width:280px;opacity:0;transition:opacity .12s}
+
+/* verdict */
+.verdict{background:var(--ink);color:var(--ondark)}
+.verdict .eyebrow{color:color-mix(in srgb,var(--ondark) 60%,transparent)}
+.verdict .head p{color:color-mix(in srgb,var(--ondark) 68%,transparent)}
+.vgrid{display:grid;grid-template-columns:1fr 1fr;gap:clamp(24px,4vw,56px);align-items:start}
+.stamp{display:inline-block;font:800 clamp(3.4rem,10vw,8.5rem)/.9 var(--display);letter-spacing:-.03em;color:var(--red);border:.09em solid var(--red);padding:.08em .22em .12em;border-radius:.08em;transform:rotate(-4deg)}
+.stamp.slam{animation:slam .7s cubic-bezier(.2,1.4,.3,1) both}
+@keyframes slam{from{transform:rotate(-10deg) scale(1.6)}to{transform:rotate(-4deg) scale(1)}}
+.reason{margin:26px 0 0;font-size:15px;color:color-mix(in srgb,var(--ondark) 78%,transparent);max-width:56ch}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:30px}
+.meter{border:1px solid color-mix(in srgb,var(--ondark) 22%,transparent);border-radius:6px;padding:16px}
+.meter .big{font:800 clamp(2.4rem,5vw,3.6rem)/1 var(--display);letter-spacing:-.03em;margin-top:10px;font-variant-numeric:tabular-nums}
+.meter p{margin:8px 0 0;font:400 12px/1.5 var(--mono);color:color-mix(in srgb,var(--ondark) 62%,transparent)}
+.meter.decides{border-color:var(--red)}
+.meter.decides .big{color:var(--red)}
+.meter .tag{font:600 10px var(--mono);letter-spacing:.1em}
+.breaches{display:grid;gap:12px}
+.breach{border:1px solid color-mix(in srgb,var(--ondark) 22%,transparent);border-left:6px solid var(--red);border-radius:4px;padding:16px 18px}
+.breach.med{border-left-color:#F0B540}
+.breach .t{display:flex;justify-content:space-between;gap:12px;font:600 12px var(--mono)}
+.breach .t span:last-child{color:var(--red)}
+.breach.med .t span:last-child{color:#F0B540}
+.breach h3{margin:8px 0 4px;font:600 15px/1.3 var(--mono);overflow-wrap:anywhere}
+.breach p{margin:0;font-size:14px;color:color-mix(in srgb,var(--ondark) 70%,transparent)}
+.breach .m{margin-top:12px;height:8px;background:color-mix(in srgb,var(--ondark) 16%,transparent);border-radius:2px;position:relative;overflow:hidden}
+.breach .m i{position:absolute;left:0;top:0;bottom:0;background:var(--red);transform-origin:left}
+.breach.med .m i{background:#F0B540}
+.breach .n{display:flex;justify-content:space-between;font:400 11px var(--mono);margin-top:6px;color:color-mix(in srgb,var(--ondark) 60%,transparent)}
+@media(max-width:900px){.vgrid{grid-template-columns:1fr}.two{grid-template-columns:1fr}}
+
+/* pipeline */
+.pipe{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px;counter-reset:s}
+.st{border:1px solid var(--line);background:var(--panel);border-radius:6px;padding:18px;display:flex;flex-direction:column;gap:10px;min-height:150px}
+.st h3{margin:0;font:600 17px/1.2 var(--display);letter-spacing:-.01em}
+.st p{margin:0;font-size:13.5px;color:var(--ink-2)}
+.st .tag{align-self:flex-start;font:600 10px/1 var(--mono);letter-spacing:.08em;padding:6px 8px;border-radius:3px;margin-top:auto}
+.tag.works{background:rgba(14,143,110,.16);color:var(--green)}
+.tag.off{background:var(--blue-soft);color:var(--blue)}
+.tag.built{background:var(--amber-soft);color:var(--amber)}
+.tag.local{background:var(--paper-2);color:var(--ink-2)}
+.st small{font:500 11px var(--mono);color:var(--ink-2)}
+
+/* services + footer */
+.svc{display:flex;flex-wrap:wrap;gap:10px}
+.svc span{font:500 13px var(--mono);border:1px solid var(--ink);padding:10px 14px;border-radius:999px}
+.svc span.dim{border-color:var(--line);color:var(--ink-2)}
+footer{border-top:1px solid var(--ink);padding-block:36px}
+footer .wrap{display:flex;flex-wrap:wrap;gap:12px 32px;justify-content:space-between;font:400 12px/1.6 var(--mono);color:var(--ink-2)}
+footer b{color:var(--ink)}
+
+
+/* modern layer */
+.nav{background:transparent;border:0;backdrop-filter:none}
+.nav .wrap{max-width:1100px;height:56px;margin-top:12px;padding-inline:20px;border:1px solid var(--line);border-radius:999px;background:color-mix(in srgb,var(--paper) 72%,transparent);backdrop-filter:blur(16px) saturate(1.4);box-shadow:0 12px 40px -18px color-mix(in srgb,var(--ink) 40%,transparent)}
+.hero{position:relative;isolation:isolate}
+.hero::before{content:"";position:absolute;inset:-140px -14% auto -14%;height:720px;z-index:-1;pointer-events:none;filter:blur(36px);
+  background:radial-gradient(38% 48% at 78% 32%,var(--blue-soft),transparent 72%),radial-gradient(26% 36% at 92% 66%,var(--red-soft),transparent 72%),radial-gradient(30% 40% at 8% 10%,var(--blue-soft),transparent 72%)}
+.hero h1 .prove{background:linear-gradient(100deg,var(--blue),color-mix(in srgb,var(--blue) 45%,var(--red)));-webkit-background-clip:text;background-clip:text;color:transparent}
+.card,.st,.meter,.breach,.graph,.ex{border-radius:20px}
+.card,.st,.graph,.ex{box-shadow:0 1px 0 color-mix(in srgb,#fff 10%,transparent) inset,0 34px 60px -38px color-mix(in srgb,var(--ink) 55%,transparent)}
+.graph{background:linear-gradient(160deg,var(--panel),color-mix(in srgb,var(--panel) 80%,var(--blue-soft)))}
+.st,.card{transition:transform .35s cubic-bezier(.2,.8,.2,1),border-color .25s}
+.st:hover,.card:hover{transform:translateY(-4px);border-color:var(--blue)}
+.pipe{grid-template-columns:repeat(4,1fr)}
+.pipe .st:nth-child(1),.pipe .st:nth-child(6){grid-column:span 2}
+@media(max-width:1000px){.pipe{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:600px){.pipe{grid-template-columns:1fr}.pipe .st:nth-child(n){grid-column:auto}}
+.rows{border-radius:0}
+.chip,.filters button,.svc span,.toggle{transition:background .2s,color .2s,border-color .2s,transform .2s}
+.filters button:hover,.toggle:hover{transform:translateY(-1px)}
+.stamp{filter:drop-shadow(0 18px 30px rgba(227,52,47,.35))}
+/* explain */
+.bk{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+.bkc{border:1px solid var(--line);background:var(--panel);border-radius:20px;padding:22px;display:flex;flex-direction:column;gap:12px}
+.bkc h3{margin:0;font:800 clamp(1.4rem,2.6vw,2rem)/1.05 var(--display);letter-spacing:-.03em}
+.bkc p{margin:0;color:var(--ink-2);font-size:14.5px}
+.seg2{display:flex;gap:8px;flex-wrap:wrap}
+.opt{font:600 11px/1 var(--mono);letter-spacing:.08em;padding:8px 10px;border-radius:999px;border:1px solid var(--line);color:var(--ink-2)}
+.opt.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.opt.ready{border-style:dashed}
+.cmd{display:flex;align-items:center;gap:10px;margin-top:auto;background:var(--paper-2);border-radius:12px;padding:10px 12px;font:500 12px var(--mono);overflow-x:auto}
+.cmd code{white-space:nowrap;flex:1}
+.cmd button{font:600 10px var(--mono);letter-spacing:.08em;background:var(--ink);color:var(--paper);border:0;border-radius:999px;padding:7px 10px;cursor:pointer}
+.ex{background:var(--ink);color:var(--ondark);padding:0;overflow:hidden;border:1px solid var(--ink)}
+.ex header{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;padding:14px 20px;border-bottom:1px solid color-mix(in srgb,var(--ondark) 18%,transparent);font:500 12px var(--mono)}
+.ex header .dots{display:flex;gap:6px}.ex header .dots i{width:10px;height:10px;border-radius:50%;background:color-mix(in srgb,var(--ondark) 30%,transparent)}
+.ex header .src{margin-left:auto;background:var(--blue);color:var(--paper);padding:6px 9px;border-radius:999px;font-weight:600;letter-spacing:.06em}
+.ex pre{margin:0;padding:22px 24px;font:400 13px/1.65 var(--mono);white-space:pre-wrap;overflow-wrap:anywhere;max-height:560px;overflow:auto}
+.ex pre .h{color:var(--blue);font-weight:600}.ex pre .r{color:var(--red)}.ex pre .w{color:#F0B540}
+.guard{margin-top:16px;display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.gcard{border:1px solid var(--line);border-radius:20px;padding:20px;background:var(--panel)}
+.gcard .q{font:500 13px/1.6 var(--mono);background:var(--paper-2);border-radius:12px;padding:12px 14px;margin:12px 0}
+.gcard .q mark{background:var(--red-soft);color:var(--red);padding:1px 4px;border-radius:3px}
+.gcard .q.ok mark{background:rgba(14,143,110,.16);color:var(--green)}
+.gcard b.tag{font:600 10px var(--mono);letter-spacing:.1em}
+@media(max-width:900px){.bk,.guard{grid-template-columns:1fr}}
+
+
+/* try it */
+.try{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.4fr);gap:clamp(18px,3vw,36px);align-items:start}
+.ctl{position:sticky;top:84px}
+.ctl .big{font:800 clamp(4rem,9vw,7rem)/.9 var(--display);letter-spacing:-.05em;font-variant-numeric:tabular-nums;margin:10px 0 0}
+.ctl .big small{font:500 14px var(--mono);letter-spacing:0;color:var(--ink-2);margin-left:8px}
+.ctl label{font:500 12px var(--mono);color:var(--ink-2);display:block;margin-top:22px}
+.ctl input[type=range]{width:100%;margin:12px 0 0;accent-color:var(--blue);height:28px}
+.ctl .num{display:flex;gap:10px;align-items:center;margin-top:14px}
+.ctl .num input{width:110px;font:600 16px var(--mono);padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--paper);color:var(--ink)}
+.ctl .presets{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.ctl .presets button{font:500 12px var(--mono);border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:8px 12px;border-radius:999px;cursor:pointer}
+.ctl .presets button:hover{border-color:var(--ink)}
+.eng{display:inline-flex;align-items:center;gap:8px;font:500 11px var(--mono);color:var(--ink-2);margin-top:18px}
+.eng i{width:8px;height:8px;border-radius:50%;background:var(--ink-2)}
+.eng.on i{background:var(--green);box-shadow:0 0 0 4px rgba(14,143,110,.2)}
+.sev{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.sevbig{font:800 clamp(2.4rem,5vw,4rem)/1 var(--display);letter-spacing:-.04em;transition:color .3s}
+.sevbig[data-s="LOW"]{color:var(--green)}.sevbig[data-s="MEDIUM"]{color:var(--amber)}.sevbig[data-s="HIGH"],.sevbig[data-s="CRITICAL"]{color:var(--red)}
+.tnote{font:400 12px/1.6 var(--mono);color:var(--ink-2);margin-top:14px}
+.tnote b{color:var(--ink)}
+.mini .row{grid-template-columns:minmax(170px,240px) 1fr 190px}
+.mini .lane .band{transition:left .45s cubic-bezier(.2,.8,.2,1),width .45s cubic-bezier(.2,.8,.2,1)}
+.mini .val b{font-size:14px}
+.err{background:var(--red-soft);color:var(--red);border-radius:12px;padding:12px 14px;font:500 13px/1.5 var(--mono);margin-top:16px}
+.dim{opacity:.35;transition:opacity .2s}
+@media(max-width:900px){.try{grid-template-columns:1fr}.ctl{position:static}.mini .row{grid-template-columns:1fr}}
+
+
+/* architecture + polish */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid var(--line)}
+.stats>div{padding:clamp(22px,3.4vw,44px) clamp(16px,2.4vw,32px);border-right:1px solid var(--line)}
+.stats>div:last-child{border-right:0}
+.stats b{display:block;font:800 clamp(2.6rem,6vw,5rem)/.95 var(--display);letter-spacing:-.05em;font-variant-numeric:tabular-nums}
+.stats span{display:block;margin-top:10px;font:500 12px/1.4 var(--mono);color:var(--ink-2);letter-spacing:.04em}
+.stats .hot b{color:var(--red)}
+@media(max-width:760px){.stats{grid-template-columns:repeat(2,1fr)}.stats>div:nth-child(2){border-right:0}.stats>div:nth-child(-n+2){border-bottom:1px solid var(--line)}}
+.arch{overflow-x:auto;border:1px solid var(--line);border-radius:22px;background:linear-gradient(160deg,var(--panel),color-mix(in srgb,var(--panel) 82%,var(--blue-soft)));padding:10px}
+.arch svg{min-width:980px;width:100%;height:auto;display:block}
+.lane-l{font:600 10px var(--mono);letter-spacing:.14em;fill:var(--ink-2)}
+.ed{fill:none;stroke:var(--line);stroke-width:2}
+.ed.flow{stroke:var(--ink-2);stroke-dasharray:6 8;animation:flow 1.4s linear infinite}
+@keyframes flow{to{stroke-dashoffset:-14}}
+.nd{cursor:pointer;outline:none}
+.nd .b{fill:var(--panel);stroke:var(--line);stroke-width:1.5;transition:stroke .25s,filter .25s,fill .25s}
+.nd:hover .b,.nd:focus-visible .b,.nd.sel .b{stroke:var(--blue)}
+.nd.pulse .b{stroke:var(--red);filter:drop-shadow(0 0 16px var(--red-soft));fill:color-mix(in srgb,var(--panel) 90%,var(--red-soft))}
+.nd .tg{font:600 9.5px var(--mono);letter-spacing:.12em;fill:var(--ink-2)}
+.nd .tt{font:800 17px var(--display);letter-spacing:-.01em;fill:var(--ink)}
+.ch rect{stroke-width:1.2}
+.ch text{font:500 9px var(--mono)}
+.ch.local rect{fill:none;stroke:var(--ink-2)}.ch.local text{fill:var(--ink)}
+.ch.built rect{fill:var(--amber-soft);stroke:var(--amber)}.ch.built text{fill:var(--amber)}
+.ch.tested rect{fill:var(--blue-soft);stroke:var(--blue)}.ch.tested text{fill:var(--blue)}
+.ch.ready rect{fill:none;stroke:var(--ink-2);stroke-dasharray:3 3}.ch.ready text{fill:var(--ink-2)}
+.legend2{display:flex;flex-wrap:wrap;gap:10px 18px;margin:0 0 16px;font:500 12px var(--mono);color:var(--ink-2)}
+.legend2 i{display:inline-block;width:12px;height:12px;border-radius:4px;margin-right:8px;vertical-align:-2px}
+.legend2 .l{border:1.5px solid var(--ink-2)}.legend2 .b{background:var(--amber-soft);border:1.5px solid var(--amber)}.legend2 .t{background:var(--blue-soft);border:1.5px solid var(--blue)}.legend2 .r{border:1.5px dashed var(--ink-2)}
+.detail{margin-top:16px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:20px;border:1px solid var(--line);border-radius:20px;padding:22px;background:var(--panel)}
+.detail h3{margin:0;font:800 clamp(1.5rem,3vw,2.2rem)/1.05 var(--display);letter-spacing:-.03em}
+.detail .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.detail .chips span{font:600 10px/1 var(--mono);letter-spacing:.06em;padding:7px 9px;border-radius:999px;border:1.2px solid var(--ink-2)}
+.detail .chips .built{background:var(--amber-soft);border-color:var(--amber);color:var(--amber)}
+.detail .chips .tested{background:var(--blue-soft);border-color:var(--blue);color:var(--blue)}
+.detail .chips .ready{border-style:dashed;color:var(--ink-2)}
+.detail p{margin:0 0 12px;color:var(--ink-2);font-size:15px}
+.detail code{font:500 12px var(--mono);background:var(--paper-2);padding:3px 7px;border-radius:6px;color:var(--ink)}
+@media(max-width:900px){.detail{grid-template-columns:1fr}}
+.card,.st,.bkc,.gcard,.meter{background-image:radial-gradient(420px circle at var(--mx,-999px) var(--my,-999px),color-mix(in srgb,var(--blue) 13%,transparent),transparent 62%)}
+
+/* cursor ring */
+.ring{position:fixed;left:0;top:0;width:34px;height:34px;margin:-17px 0 0 -17px;border:1.5px solid var(--ink);border-radius:50%;pointer-events:none;z-index:60;opacity:0;transition:width .2s,height .2s,margin .2s,background .2s,opacity .2s;mix-blend-mode:difference;border-color:#fff}
+.ring.big{width:64px;height:64px;margin:-32px 0 0 -32px;background:rgba(255,255,255,.18)}
+@media(pointer:coarse){.ring{display:none}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.track{animation:none}.stamp.slam{animation:none}*{transition-duration:.01ms!important}}
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="#top"><i></i>ChangeProof</a>
+    <nav aria-label="Sections">
+      <a href="#tools">Tools</a><a href="#change">The change</a><a href="#try">Try it</a><a href="#proof">Proof</a><a href="#verdict">Verdict</a><a href="#explain">Explain</a><a href="#pipeline">Pipeline</a><a href="#aws">AWS</a>
+    </nav>
+    <button class="toggle" id="theme" type="button" aria-label="Toggle colour theme">Theme</button>
+  </div>
+</header>
+<div class="sim" role="note"><div class="wrap"><b>SIMULATED</b><span>Every measurement on this page is fixture telemetry. No AWS call was made to produce it, and the evidence bundle says so.</span></div></div>
+
+<main id="top">
+<div class="wrap hero">
+  <div class="hero-grid">
+    <div>
+      <div class="eyebrow">Infrastructure change verification</div>
+      <h1>Don&rsquo;t just review the change. <span class="prove">Prove it.<svg viewBox="0 0 100 10" preserveAspectRatio="none" aria-hidden="true"><path id="under" d="M1 6 C 20 1, 40 9, 60 4 S 90 3, 99 6" pathLength="1"/></svg></span></h1>
+      <p class="lede">ChangeProof takes a proposed Terraform change, works out what depends on it, predicts the impact, then measures what actually happens and returns APPROVE or REJECT with the evidence attached. Below is one real run, replayed from its evidence bundle.</p>
+      <div class="exp"><span class="chip" id="expid"></span><span class="chip rej" id="expverdict"></span></div>
+    </div>
+    <div class="graph" aria-label="Blast radius of the change across four AWS resources">
+      <span class="eyebrow cap">Blast radius</span>
+      <canvas id="graph"></canvas>
+      <span class="cap2" id="graphcap"></span>
+    </div>
+  </div>
+</div>
+<div class="marquee" aria-hidden="true"><div class="track" id="track"></div></div>
+
+
+<div class="stats" id="stats" role="list">
+  <div role="listitem"><b data-n="__RES__">0</b><span>resources in the blast radius</span></div>
+  <div role="listitem"><b data-n="__MET__">0</b><span>metrics predicted and measured</span></div>
+  <div role="listitem" class="hot"><b data-n="__BR__">0</b><span>safety limits breached</span></div>
+  <div role="listitem"><b data-n="__ACC__" data-suf="%">0</b><span>of predictions inside their band</span></div>
+</div>
+
+<section id="tools"><div class="wrap">
+  <div class="head"><div class="eyebrow">Architecture</div><div><h2>Every tool, and exactly how far along it is.</h2><p>The decision runs locally so it is fast and free. AWS is used where it is genuinely needed: measuring real behaviour, storing evidence, and explaining it. Hover any node.</p></div></div>
+  <p class="legend2"><span><i class="l"></i>Running locally</span><span><i class="t"></i>AWS, offline-tested</span><span><i class="b"></i>AWS, built, not yet run</span><span><i class="r"></i>Adapter ready, not connected</span></p>
+  <div class="arch"><svg id="arch" viewBox="0 0 1200 640" role="img" aria-label="ChangeProof architecture: local decision engine, AWS measurement and storage"></svg></div>
+  <div class="detail" id="detail"></div>
+</div></section>
+
+<section id="change"><div class="wrap">
+  <div class="head"><div class="eyebrow">01 &middot; Input</div><div><h2>One attribute changes. Four resources feel it.</h2><p>The proposed Terraform plan touches a single field. The engine walks the dependency graph and fires one rule against it.</p></div></div>
+  <div class="diff">
+    <div class="card">
+      <div class="attr" id="attr"></div>
+      <div class="roll"><span class="n from" id="from">0</span><span class="arrow">&rarr;</span><span class="n" id="to">0</span></div>
+      <span class="mult" id="mult"></span>
+      <div class="scale" id="scale"></div>
+    </div>
+    <div class="card">
+      <div class="eyebrow">Rule fired</div>
+      <h3 class="mono" style="font-size:15px;margin:12px 0 10px" id="ruleid"></h3>
+      <p class="rule" id="ruledesc"></p>
+      <div class="eyebrow" style="margin-top:26px">Predicted severity</div>
+      <div id="dims" style="display:grid;gap:10px;margin-top:12px"></div>
+      <p class="rule mono" style="margin-top:18px;font-size:12px" id="conf"></p>
+    </div>
+  </div>
+</div></section>
+
+
+<section id="try" style="padding-top:0"><div class="wrap">
+  <div class="head"><div class="eyebrow">Live &middot; local engine</div><div><h2>Change the number. Watch the prediction move.</h2><p>This runs the real parser and prediction rules on your machine. It predicts only. The measured verdict exists for one recorded run, and this page never invents a measurement for any other value.</p></div></div>
+  <div class="try">
+    <div class="card ctl">
+      <div class="eyebrow">reserved_concurrent_executions</div>
+      <div class="big"><span id="tafter">100</span><small>from 10</small></div>
+      <label for="trange">Proposed value</label>
+      <input id="trange" type="range" min="1" max="300" value="100">
+      <div class="num"><input id="tnum" type="number" min="1" max="1000" value="100" aria-label="Exact value"><span class="mono" style="font-size:12px;color:var(--ink-2)">1 to 1000</span></div>
+      <div class="presets" id="presets"></div>
+      <div class="eng" id="eng"><i></i><span id="engtxt">connecting to local engine</span></div>
+    </div>
+    <div class="card" id="tout">
+      <div class="sev"><span class="sevbig" id="tsev" data-s="HIGH">HIGH</span><span class="chip" id="tmult"></span><span class="chip" id="trad"></span></div>
+      <div id="tdims" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:18px"></div>
+      <div class="eyebrow" style="margin-top:26px">Predicted change per metric <span style="text-transform:none;letter-spacing:0">(blue band = predicted range)</span></div>
+      <div class="rows mini" id="trows" style="margin-top:12px"></div>
+      <div class="err" id="terr" hidden></div>
+      <p class="tnote" id="tnote"></p>
+    </div>
+  </div>
+</div></section>
+
+<section id="proof" style="background:var(--paper-2)"><div class="wrap">
+  <div class="head"><div class="eyebrow">02 &middot; Evidence</div><div><h2>What we predicted against what was measured.</h2><p>Each row is one metric on one resource. The blue band is the predicted change. The dot is the measured change. Red ticks mark the safety limit.</p></div></div>
+  <div class="filters" role="group" aria-label="Filter metrics">
+    <button type="button" data-f="all" aria-pressed="true">All metrics</button>
+    <button type="button" data-f="breach" aria-pressed="false">Breached a limit</button>
+    <button type="button" data-f="worse" aria-pressed="false">Worse than predicted</button>
+    <button type="button" data-f="within" aria-pressed="false">Within prediction</button>
+  </div>
+  <p class="legend"><span><i class="k1"></i>Predicted range</span><span><i class="k2"></i>Measured change</span><span><i class="k3"></i>Safety limit</span></p>
+  <div class="rows" id="rows"></div>
+</div></section>
+
+<section id="verdict" class="verdict"><div class="wrap">
+  <div class="head"><div class="eyebrow">03 &middot; Decision</div><div><h2>The verdict comes from limits, not from the forecast.</h2><p>Prediction accuracy is recorded for calibration. Only measured values against explicit safety limits can approve or reject.</p></div></div>
+  <div class="vgrid">
+    <div>
+      <div class="stamp" id="stamp">REJECTED</div>
+      <p class="reason" id="reason"></p>
+      <div class="two">
+        <div class="meter"><span class="tag" style="opacity:.6">DOES NOT DECIDE</span><div class="big" id="acc">0%</div><p>of metrics landed inside the predicted band. The engine reports its own misses.</p></div>
+        <div class="meter decides"><span class="tag">DECIDES</span><div class="big" id="nbreach">0</div><p>safety limits breached by measured values. Any breach at HIGH rejects.</p></div>
+      </div>
+    </div>
+    <div class="breaches" id="breaches"></div>
+  </div>
+</div></section>
+
+
+<section id="explain"><div class="wrap">
+  <div class="head"><div class="eyebrow">04 &middot; Explanation</div><div><h2>A model may explain the evidence. It may not add to it.</h2><p>Amazon Bedrock turns the stored evidence into prose. Every number in its answer is checked against the evidence bundle, and an answer with an invented figure is thrown away.</p></div></div>
+  <div class="bk">
+    <div class="bkc"><span class="eyebrow">Dependency graph</span><h3>Amazon Neptune</h3><p>Resource relationships are read with openCypher and walked by the same engine code as the local graph. A parity test proves identical paths. Neptune bills while idle, so it stays unprovisioned until the budget allows it.</p>
+      <div class="seg2" id="gopts"></div>
+      <div class="cmd"><code>python scripts/run_live.py --graph neptune</code><button type="button" data-copy="python scripts/run_live.py --graph neptune">COPY</button></div></div>
+    <div class="bkc"><span class="eyebrow">Explainer</span><h3>Amazon Bedrock</h3><p>Called through the Converse API at temperature zero with the evidence bundle as its only input. The verdict is never sent for revision and never read back from the model.</p>
+      <div class="seg2" id="eopts"></div>
+      <div class="cmd"><code>python scripts/run_live.py --explainer bedrock</code><button type="button" data-copy="python scripts/run_live.py --explainer bedrock">COPY</button></div></div>
+  </div>
+  <div class="ex" id="ex"><header><span class="dots"><i></i><i></i><i></i></span><span id="exfile"></span><span class="src" id="exsrc"></span></header><pre id="extext"></pre></div>
+  <div class="guard">
+    <div class="gcard"><b class="tag" style="color:var(--green)">ACCEPTED &middot; TEST CASE</b><div class="q ok">&hellip;queue depth rose <mark>1240.0%</mark> against a limit of <mark>300%</mark>. Only <mark>25%</mark> of metrics landed inside the band.</div><span class="mono" style="font-size:12px;color:var(--ink-2)">Every figure exists in the evidence bundle.</span></div>
+    <div class="gcard"><b class="tag" style="color:var(--red)">REJECTED &middot; TEST CASE</b><div class="q">&hellip;costs would rise by <mark>7431</mark> dollars per month.</div><span class="mono" style="font-size:12px;color:var(--ink-2)">7431 is not in the evidence. The answer is discarded and the deterministic explanation is used.</span></div>
+  </div>
+</div></section>
+
+<section id="pipeline"><div class="wrap">
+  <div class="head"><div class="eyebrow">05 &middot; Status</div><div><h2>What is real today, and what is not.</h2><p>Nothing here is presented as more finished than it is. The reasoning engine runs end to end. The AWS half is built and tested offline, and has not yet been executed against an account.</p></div></div>
+  <div class="pipe" id="pipe"></div>
+</div></section>
+
+<section id="aws" style="background:var(--paper-2)"><div class="wrap">
+  <div class="head"><div class="eyebrow">06 &middot; Stack</div><div><h2>Built on AWS, gated by cost and safety.</h2><p>ChangeProof never touches production. Read access is a single permission, spend is gated per run, and Bedrock only explains evidence, it never originates it. Neptune and Bedrock are built as adapters and stay off until their cost is approved.</p></div></div>
+  <div class="svc" id="svc"></div>
+</div></section>
+</main>
+
+<footer><div class="wrap">
+  <div><b>ChangeProof</b><br>Experiment <span id="fexp"></span> &middot; phase <span id="fphase"></span></div>
+  <div>Rendered from the evidence bundle written by the engine.<br>Numbers are simulated fixture telemetry, not measured AWS behaviour.</div>
+</div></footer>
+<div class="tip" id="tip" role="tooltip"></div>
+<div class="ring" id="ring"></div>
+
+<script>
+const E = {"experimentId": "EXP-DEMO-001", "phase": "phase-0-local", "changeSet": {"terraformVersion": "1.9.8", "formatVersion": "1.2", "changes": [{"address": "aws_lambda_function.api", "resourceType": "aws_lambda_function", "name": "api", "actions": ["update"], "attributeChanges": [{"attribute": "reserved_concurrent_executions", "before": 10, "after": 100}]}, {"address": "aws_sqs_queue.work", "resourceType": "aws_sqs_queue", "name": "work", "actions": ["no-op"], "attributeChanges": []}]}, "prediction": {"severity": "HIGH", "dimensions": {"security": "NONE", "reliability": "HIGH", "cost": "MEDIUM"}, "blastRadius": {"originAddresses": ["aws_lambda_function.api"], "affectedAddresses": ["aws_lambda_function.api", "aws_sqs_queue.work", "aws_lambda_function.worker", "aws_dynamodb_table.orders"], "resourceCount": 4, "paths": [{"origin": "aws_lambda_function.api", "target": "aws_sqs_queue.work", "depth": 1, "propagation": 0.9, "hops": [{"source": "aws_lambda_function.api", "target": "aws_sqs_queue.work", "relation": "writes_to", "propagation": 0.9}]}, {"origin": "aws_lambda_function.api", "target": "aws_lambda_function.worker", "depth": 2, "propagation": 0.855, "hops": [{"source": "aws_lambda_function.api", "target": "aws_sqs_queue.work", "relation": "writes_to", "propagation": 0.9}, {"source": "aws_sqs_queue.work", "target": "aws_lambda_function.worker", "relation": "triggers", "propagation": 0.95}]}, {"origin": "aws_lambda_function.api", "target": "aws_dynamodb_table.orders", "depth": 3, "propagation": 0.684, "hops": [{"source": "aws_lambda_function.api", "target": "aws_sqs_queue.work", "relation": "writes_to", "propagation": 0.9}, {"source": "aws_sqs_queue.work", "target": "aws_lambda_function.worker", "relation": "triggers", "propagation": 0.95}, {"source": "aws_lambda_function.worker", "target": "aws_dynamodb_table.orders", "relation": "writes_to", "propagation": 0.8}]}]}, "predictedMetrics": [{"resourceAddress": "aws_lambda_function.api", "metric": "ConcurrentExecutions", "expectedChangePctLow": 585.0, "expectedChangePctHigh": 1215.0, "rationale": "directly changed; pressure multiplier 10.00x, metric sensitivity 1.0"}, {"resourceAddress": "aws_lambda_function.api", "metric": "Duration", "expectedChangePctLow": 204.75, "expectedChangePctHigh": 425.25, "rationale": "directly changed; pressure multiplier 10.00x, metric sensitivity 0.35"}, {"resourceAddress": "aws_lambda_function.api", "metric": "Throttles", "expectedChangePctLow": 585.0, "expectedChangePctHigh": 1215.0, "rationale": "directly changed; pressure multiplier 10.00x, metric sensitivity 1.0"}, {"resourceAddress": "aws_lambda_function.api", "metric": "Errors", "expectedChangePctLow": 292.5, "expectedChangePctHigh": 607.5, "rationale": "directly changed; pressure multiplier 10.00x, metric sensitivity 0.5"}, {"resourceAddress": "aws_sqs_queue.work", "metric": "ApproximateNumberOfMessagesVisible", "expectedChangePctLow": 451.31, "expectedChangePctHigh": 937.34, "rationale": "aws_lambda_function.api -> aws_sqs_queue.work (depth 1, propagation 0.900); pressure multiplier 7.94x, metric sensitivity 1.0"}, {"resourceAddress": "aws_sqs_queue.work", "metric": "ApproximateAgeOfOldestMessage", "expectedChangePctLow": 270.79, "expectedChangePctHigh": 562.41, "rationale": "aws_lambda_function.api -> aws_sqs_queue.work (depth 1, propagation 0.900); pressure multiplier 7.94x, metric sensitivity 0.6"}, {"resourceAddress": "aws_lambda_function.worker", "metric": "ConcurrentExecutions", "expectedChangePctLow": 400.49, "expectedChangePctHigh": 831.79, "rationale": "aws_lambda_function.api -> aws_sqs_queue.work -> aws_lambda_function.worker (depth 2, propagation 0.855); pressure multiplier 7.16x, metric sensitivity 1.0"}, {"resourceAddress": "aws_lambda_function.worker", "metric": "Duration", "expectedChangePctLow": 140.17, "expectedChangePctHigh": 291.13, "rationale": "aws_lambda_function.api -> aws_sqs_queue.work -> aws_lambda_function.worker (depth 2, propagation 0.855); pressure multiplier 7.16x, metric sensitivity 0.35"}, {"resourceAddress": "aws_lambda_function.worker", "metric": "Throttles", "expectedChangePctLow": 400.49, "expectedChangePctHigh": 831.79, "rationale": "aws_lambda_function.api -> aws_sqs_queue.work -> aws_lambda_function.worker (depth 2, propagation 0.855); pressure multiplier 7.16x, metric sensitivity 1.0"}, {"resourceAddress": "aws_lambda_function.worker", "metric": "Errors", "expectedChangePctLow": 200.25, "expectedChangePctHigh": 415.9, "rationale": "aws_lambda_function.api -> aws_sqs_queue.work -> aws_lambda_function.worker (depth 2, propagation 0.855); pressure multiplier 7.16x, metric sensitivity 0.5"}, {"resourceAddress": "aws_dynamodb_table.orders", "metric": "ConsumedWriteCapacityUnits", "expectedChangePctLow": 248.99, "expectedChangePctHigh": 517.13, "rationale": "aws_lambda_function.api -> aws_sqs_queue.work -> aws_lambda_function.worker -> aws_dynamodb_table.orders (depth 3, propagation 0.684); pressure multiplier 4.83x, metric sensitivity 1.0"}, {"resourceAddress": "aws_dynamodb_table.orders", "metric": "ThrottledRequests", "expectedChangePctLow": 248.99, "expectedChangePctHigh": 517.13, "rationale": "aws_lambda_function.api -> aws_sqs_queue.work -> aws_lambda_function.worker -> aws_dynamodb_table.orders (depth 3, propagation 0.684); pressure multiplier 4.83x, metric sensitivity 1.0"}, {"resourceAddress": "aws_dynamodb_table.orders", "metric": "SuccessfulRequestLatency", "expectedChangePctLow": 87.15, "expectedChangePctHigh": 181.0, "rationale": "aws_lambda_function.api -> aws_sqs_queue.work -> aws_lambda_function.worker -> aws_dynamodb_table.orders (depth 3, propagation 0.684); pressure multiplier 4.83x, metric sensitivity 0.35"}], "rulesFired": [{"ruleId": "lambda.reserved_concurrency.increase", "description": "Raising reserved concurrency raises the number of simultaneous invocations, and therefore the simultaneous load placed on every downstream dependency.", "inputs": {"address": "aws_lambda_function.api", "attribute": "reserved_concurrent_executions", "before": 10.0, "after": 100.0, "multiplier": 10.0}, "threshold": {"bands": [{"upToMultiplier": 1.5, "severity": "LOW"}, {"upToMultiplier": 3.0, "severity": "MEDIUM"}, {"upToMultiplier": 20.0, "severity": "HIGH"}, {"upToMultiplier": null, "severity": "CRITICAL"}]}, "outcome": "reliability severity HIGH at multiplier 10.00x"}], "confidence": 0.67}, "observation": {"source": "fixture:telemetry_observed.json", "simulated": true, "metrics": [{"resourceAddress": "aws_lambda_function.api", "metric": "ConcurrentExecutions", "unit": "Count", "baselineValue": 9.0, "observedValue": 94.0, "changePct": 944.44}, {"resourceAddress": "aws_lambda_function.api", "metric": "Duration", "unit": "Milliseconds", "baselineValue": 120.0, "observedValue": 180.0, "changePct": 50.0}, {"resourceAddress": "aws_lambda_function.api", "metric": "Throttles", "unit": "Count", "baselineValue": 0.0, "observedValue": 0.0, "changePct": null}, {"resourceAddress": "aws_lambda_function.api", "metric": "Errors", "unit": "Count", "baselineValue": 0.0, "observedValue": 0.0, "changePct": null}, {"resourceAddress": "aws_sqs_queue.work", "metric": "ApproximateNumberOfMessagesVisible", "unit": "Count", "baselineValue": 200.0, "observedValue": 2680.0, "changePct": 1240.0}, {"resourceAddress": "aws_sqs_queue.work", "metric": "ApproximateAgeOfOldestMessage", "unit": "Seconds", "baselineValue": 4.0, "observedValue": 46.0, "changePct": 1050.0}, {"resourceAddress": "aws_lambda_function.worker", "metric": "ConcurrentExecutions", "unit": "Count", "baselineValue": 5.0, "observedValue": 5.0, "changePct": 0.0}, {"resourceAddress": "aws_lambda_function.worker", "metric": "Duration", "unit": "Milliseconds", "baselineValue": 210.0, "observedValue": 240.0, "changePct": 14.29}, {"resourceAddress": "aws_lambda_function.worker", "metric": "Throttles", "unit": "Count", "baselineValue": 0.0, "observedValue": 1840.0, "changePct": null}, {"resourceAddress": "aws_lambda_function.worker", "metric": "Errors", "unit": "Count", "baselineValue": 0.0, "observedValue": 0.0, "changePct": null}, {"resourceAddress": "aws_dynamodb_table.orders", "metric": "ConsumedWriteCapacityUnits", "unit": "Count", "baselineValue": 45.0, "observedValue": 196.0, "changePct": 335.56}, {"resourceAddress": "aws_dynamodb_table.orders", "metric": "ThrottledRequests", "unit": "Count", "baselineValue": 0.0, "observedValue": 0.0, "changePct": null}, {"resourceAddress": "aws_dynamodb_table.orders", "metric": "SuccessfulRequestLatency", "unit": "Milliseconds", "baselineValue": 12.0, "observedValue": 58.0, "changePct": 383.33}]}, "comparison": {"verdict": "REJECT", "observedSeverity": "HIGH", "breaches": [{"resourceAddress": "aws_dynamodb_table.orders", "metric": "SuccessfulRequestLatency", "actualValue": 383.33, "limit": 100.0, "limitKind": "change_pct", "severity": "HIGH", "description": "Datastore latency more than doubled under the test workload."}, {"resourceAddress": "aws_lambda_function.worker", "metric": "Throttles", "actualValue": 1840.0, "limit": 0.0, "limitKind": "absolute", "severity": "HIGH", "description": "Lambda throttling means requests were rejected outright."}, {"resourceAddress": "aws_sqs_queue.work", "metric": "ApproximateNumberOfMessagesVisible", "actualValue": 1240.0, "limit": 300.0, "limitKind": "change_pct", "severity": "HIGH", "description": "Queue depth grew more than fourfold, indicating the consumer cannot keep up."}, {"resourceAddress": "aws_sqs_queue.work", "metric": "ApproximateAgeOfOldestMessage", "actualValue": 1050.0, "limit": 200.0, "limitKind": "change_pct", "severity": "MEDIUM", "description": "Messages are waiting substantially longer before being processed."}], "metricComparisons": [{"resourceAddress": "aws_lambda_function.api", "metric": "ConcurrentExecutions", "predictedLow": 585.0, "predictedHigh": 1215.0, "actualChangePct": 944.44, "outcome": "WITHIN_PREDICTION"}, {"resourceAddress": "aws_lambda_function.api", "metric": "Duration", "predictedLow": 204.75, "predictedHigh": 425.25, "actualChangePct": 50.0, "outcome": "BETTER_THAN_PREDICTED"}, {"resourceAddress": "aws_lambda_function.api", "metric": "Throttles", "predictedLow": 585.0, "predictedHigh": 1215.0, "actualChangePct": null, "outcome": "NOT_OBSERVED"}, {"resourceAddress": "aws_lambda_function.api", "metric": "Errors", "predictedLow": 292.5, "predictedHigh": 607.5, "actualChangePct": null, "outcome": "NOT_OBSERVED"}, {"resourceAddress": "aws_sqs_queue.work", "metric": "ApproximateNumberOfMessagesVisible", "predictedLow": 451.31, "predictedHigh": 937.34, "actualChangePct": 1240.0, "outcome": "WORSE_THAN_PREDICTED"}, {"resourceAddress": "aws_sqs_queue.work", "metric": "ApproximateAgeOfOldestMessage", "predictedLow": 270.79, "predictedHigh": 562.41, "actualChangePct": 1050.0, "outcome": "WORSE_THAN_PREDICTED"}, {"resourceAddress": "aws_lambda_function.worker", "metric": "ConcurrentExecutions", "predictedLow": 400.49, "predictedHigh": 831.79, "actualChangePct": 0.0, "outcome": "BETTER_THAN_PREDICTED"}, {"resourceAddress": "aws_lambda_function.worker", "metric": "Duration", "predictedLow": 140.17, "predictedHigh": 291.13, "actualChangePct": 14.29, "outcome": "BETTER_THAN_PREDICTED"}, {"resourceAddress": "aws_lambda_function.worker", "metric": "Throttles", "predictedLow": 400.49, "predictedHigh": 831.79, "actualChangePct": null, "outcome": "NOT_OBSERVED"}, {"resourceAddress": "aws_lambda_function.worker", "metric": "Errors", "predictedLow": 200.25, "predictedHigh": 415.9, "actualChangePct": null, "outcome": "NOT_OBSERVED"}, {"resourceAddress": "aws_dynamodb_table.orders", "metric": "ConsumedWriteCapacityUnits", "predictedLow": 248.99, "predictedHigh": 517.13, "actualChangePct": 335.56, "outcome": "WITHIN_PREDICTION"}, {"resourceAddress": "aws_dynamodb_table.orders", "metric": "ThrottledRequests", "predictedLow": 248.99, "predictedHigh": 517.13, "actualChangePct": null, "outcome": "NOT_OBSERVED"}, {"resourceAddress": "aws_dynamodb_table.orders", "metric": "SuccessfulRequestLatency", "predictedLow": 87.15, "predictedHigh": 181.0, "actualChangePct": 383.33, "outcome": "WORSE_THAN_PREDICTED"}], "predictionAccuracy": 0.25, "reason": "Rejected at observed severity HIGH. Safety limits breached: aws_dynamodb_table.orders SuccessfulRequestLatency; aws_lambda_function.worker Throttles; aws_sqs_queue.work ApproximateNumberOfMessagesVisible."}, "notes": ["Phase 0: no AWS API call was made at any point in this run.", "Test environment provisioning, change application and synthetic workload generation are not implemented; telemetry came from a fixture.", "Dependency graph served by: local fixture."]};
+const X = {"backends": {"graph": "local", "explainer": "local", "model": null, "explainerSource": "deterministic"}, "explanation": "PROPOSED CHANGE\n  aws_lambda_function.api (update)\n    reserved_concurrent_executions: 10 -> 100\n\nPREDICTION\n  Overall severity: HIGH (confidence 67%)\n    security: NONE\n    reliability: HIGH\n    cost: MEDIUM\n  Blast radius: 4 resources - aws_lambda_function.api, aws_sqs_queue.work, aws_lambda_function.worker, aws_dynamodb_table.orders\n  Rule lambda.reserved_concurrency.increase: reliability severity HIGH at multiplier 10.00x\n    Raising reserved concurrency raises the number of simultaneous invocations, and therefore the simultaneous load placed on every downstream dependency.\n\nOBSERVED (fixture:telemetry_observed.json)\n  aws_lambda_function.api ConcurrentExecutions: 9 -> 94 Count (+944.4%)\n  aws_lambda_function.api Duration: 120 -> 180 Milliseconds (+50.0%)\n  aws_lambda_function.api Throttles: 0 -> 0 Count (no baseline ratio)\n  aws_lambda_function.api Errors: 0 -> 0 Count (no baseline ratio)\n  aws_sqs_queue.work ApproximateNumberOfMessagesVisible: 200 -> 2680 Count (+1240.0%)\n  aws_sqs_queue.work ApproximateAgeOfOldestMessage: 4 -> 46 Seconds (+1050.0%)\n  aws_lambda_function.worker ConcurrentExecutions: 5 -> 5 Count (+0.0%)\n  aws_lambda_function.worker Duration: 210 -> 240 Milliseconds (+14.3%)\n  aws_lambda_function.worker Throttles: 0 -> 1840 Count (no baseline ratio)\n  aws_lambda_function.worker Errors: 0 -> 0 Count (no baseline ratio)\n  aws_dynamodb_table.orders ConsumedWriteCapacityUnits: 45 -> 196 Count (+335.6%)\n  aws_dynamodb_table.orders ThrottledRequests: 0 -> 0 Count (no baseline ratio)\n  aws_dynamodb_table.orders SuccessfulRequestLatency: 12 -> 58 Milliseconds (+383.3%)\n\nDECISION: REJECTED\n  Rejected at observed severity HIGH. Safety limits breached: aws_dynamodb_table.orders SuccessfulRequestLatency; aws_lambda_function.worker Throttles; aws_sqs_queue.work ApproximateNumberOfMessagesVisible.\n  Safety limits breached:\n    [HIGH] aws_dynamodb_table.orders SuccessfulRequestLatency: +383.3% exceeds limit 100%. Datastore latency more than doubled under the test workload.\n    [HIGH] aws_lambda_function.worker Throttles: 1840 exceeds limit 0. Lambda throttling means requests were rejected outright.\n    [HIGH] aws_sqs_queue.work ApproximateNumberOfMessagesVisible: +1240.0% exceeds limit 300%. Queue depth grew more than fourfold, indicating the consumer cannot keep up.\n    [MEDIUM] aws_sqs_queue.work ApproximateAgeOfOldestMessage: +1050.0% exceeds limit 200%. Messages are waiting substantially longer before being processed.\n\nPREDICTED vs ACTUAL\n  Metrics inside the predicted band: 25%\n  Underestimated: aws_sqs_queue.work ApproximateNumberOfMessagesVisible predicted up to +937.3%, observed +1240.0%\n  Underestimated: aws_sqs_queue.work ApproximateAgeOfOldestMessage predicted up to +562.4%, observed +1050.0%\n  Underestimated: aws_dynamodb_table.orders SuccessfulRequestLatency predicted up to +181.0%, observed +383.3%\n\nPROVENANCE\n  Experiment: EXP-DEMO-001\n  Phase: phase-0-local\n  Explanation generated by DeterministicExplainer (templates over the evidence bundle). No language model was involved.\n  WARNING: telemetry is SIMULATED fixture data, not measured from AWS. This verdict demonstrates the engine, it does not describe real infrastructure behaviour.\n  Note: Phase 0: no AWS API call was made at any point in this run.\n  Note: Test environment provisioning, change application and synthetic workload generation are not implemented; telemetry came from a fixture.\n  Note: Dependency graph served by: local fixture."};
+const $ = (s, r=document) => r.querySelector(s);
+const still = /[?&]still/.test(location.search);
+const reduce = still || matchMedia('(prefers-reduced-motion: reduce)').matches;
+const short = a => a.replace(/^aws_/,'');
+const fmtPct = v => (v>0?'+':'')+(Math.round(v*10)/10)+'%';
+const ATTR = E.changeSet.changes.find(c=>c.attributeChanges.length);
+const CH = ATTR.attributeChanges[0];
+const RULE = E.prediction.rulesFired[0];
+const CMP = E.comparison;
+const OBS = Object.fromEntries(E.observation.metrics.map(m=>[m.resourceAddress+'|'+m.metric,m]));
+const BR = Object.fromEntries(CMP.breaches.map(b=>[b.resourceAddress+'|'+b.metric,b]));
+
+/* header bits */
+$('#expid').textContent = E.experimentId;
+$('#expverdict').textContent = CMP.verdict==='REJECT'?'REJECTED':'APPROVED';
+$('#fexp').textContent = E.experimentId; $('#fphase').textContent = E.phase;
+$('#graphcap').textContent = E.prediction.blastRadius.resourceCount+' resources in blast radius';
+
+/* marquee from real measurements */
+const items = E.observation.metrics.map(m=>{
+  const ch = m.changePct==null ? m.baselineValue+' → '+m.observedValue : fmtPct(m.changePct);
+  const hot = BR[m.resourceAddress+'|'+m.metric];
+  return `<span>${short(m.resourceAddress)} ${m.metric} <b>${hot?'▲ ':''}${ch}</b></span>`;
+}).join('');
+$('#track').innerHTML = items+items;
+
+/* change card */
+$('#attr').textContent = ATTR.address+' · '+CH.attribute;
+const roll = (el,to,ms=1400)=>{
+  if(reduce){el.textContent=to;return}
+  const t0=performance.now();
+  (function f(t){const p=Math.min(1,(t-t0)/ms),e=1-Math.pow(1-p,4);el.textContent=Math.round(to*e);if(p<1)requestAnimationFrame(f)})(t0);
+};
+$('#from').textContent = CH.before; $('#to').textContent = CH.after;
+$('#mult').textContent = RULE.inputs.multiplier.toFixed(1)+'× concurrency increase';
+$('#ruleid').textContent = RULE.ruleId;
+$('#ruledesc').textContent = RULE.description;
+$('#conf').textContent = 'confidence '+Math.round(E.prediction.confidence*100)+'% · '+RULE.outcome;
+
+/* severity bands scale (log positions) */
+(function(){
+  const bands = RULE.threshold.bands, m = RULE.inputs.multiplier;
+  const stops = bands.map(b=>b.upToMultiplier), top = 30;
+  const pos = v => Math.log(v)/Math.log(top);
+  let prev = 1, html='', colors={LOW:'var(--paper-2)',MEDIUM:'var(--amber-soft)',HIGH:'var(--red-soft)',CRITICAL:'var(--red-soft)'};
+  const active = bands.find(b=>b.upToMultiplier==null||m<=b.upToMultiplier).severity;
+  bands.forEach(b=>{
+    const end = b.upToMultiplier==null?top:b.upToMultiplier;
+    const w = (pos(end)-pos(prev))*100; prev = end;
+    const on = b.severity===active;
+    html+=`<div class="seg ${on?'on':''}" style="width:${w}%;background:${on?'var(--red)':colors[b.severity]}">${b.severity}</div>`;
+  });
+  $('#scale').innerHTML = `<div class="bar">${html}</div><div class="pin"><i style="left:${pos(m)*100}%"></i><em style="left:${pos(m)*100}%">${m}×</em></div>`;
+})();
+
+/* dimensions */
+(function(){
+  const c={NONE:'var(--ink-2)',LOW:'var(--green)',MEDIUM:'var(--amber)',HIGH:'var(--red)',CRITICAL:'var(--red)'};
+  $('#dims').innerHTML = Object.entries(E.prediction.dimensions).map(([k,v])=>
+    `<div style="display:flex;justify-content:space-between;border-bottom:1px solid var(--line);padding-bottom:8px"><span class="mono" style="font-size:13px;text-transform:capitalize">${k}</span><b class="mono" style="font-size:13px;color:${c[v]}">${v}</b></div>`).join('');
+})();
+
+/* proof rows */
+const SCALE_MAX = 1400, sx = v => Math.sqrt(Math.max(0,Math.min(v,SCALE_MAX))/SCALE_MAX)*100;
+const TICKS=[0,50,100,300,600,1000];
+const outcomeLabel={WITHIN_PREDICTION:['within','WITHIN PREDICTION'],WORSE_THAN_PREDICTED:['worse','WORSE THAN PREDICTED'],BETTER_THAN_PREDICTED:['better','BETTER THAN PREDICTED'],NOT_OBSERVED:['none','NO BASELINE RATIO']};
+const rowsEl = $('#rows');
+rowsEl.innerHTML = CMP.metricComparisons.map(mc=>{
+  const key = mc.resourceAddress+'|'+mc.metric, o = OBS[key], b = BR[key];
+  const [cls,lab] = outcomeLabel[mc.outcome]||['none',mc.outcome];
+  const hasPred = mc.predictedLow!=null && mc.predictedHigh!=null;
+  const actual = mc.actualChangePct;
+  const ticks = TICKS.map(t=>`<span class="tick" style="left:${sx(t)}%"><em>${t}%</em></span>`).join('');
+  const band = hasPred?`<span class="band" style="left:${sx(mc.predictedLow)}%;width:${Math.max(.8,sx(mc.predictedHigh)-sx(mc.predictedLow))}%"></span>`:'';
+  const lim = b&&b.limitKind==='change_pct'?`<span class="lim" style="left:${sx(b.limit)}%"></span>`:'';
+  const dot = actual==null&&b?`<span class="dot bad" style="left:97%"></span><span class="off">off scale</span>`:actual!=null?`<span class="dot ${b?'bad':(mc.outcome==='BETTER_THAN_PREDICTED'?'good':'')}" style="left:${sx(actual)}%"></span>`:'';
+  const big = actual!=null?fmtPct(actual):(o?o.baselineValue+' → '+o.observedValue:'—');
+  const sub = o?`${o.baselineValue} → ${o.observedValue} ${o.unit}`:'no reading';
+  const flags = [b?'breach':'', mc.outcome==='WORSE_THAN_PREDICTED'?'worse':'', mc.outcome==='WITHIN_PREDICTION'?'within':''].join(' ');
+  const tip = `${short(mc.resourceAddress)} · ${mc.metric}\n`+(hasPred?`predicted ${fmtPct(mc.predictedLow)} to ${fmtPct(mc.predictedHigh)}\n`:'no prediction band\n')+`measured ${actual!=null?fmtPct(actual):'no baseline ratio'}\n${sub}`+(b?`\nBREACH: ${b.limit}${b.limitKind==='change_pct'?'%':' absolute'} limit`:'');
+  return `<div class="row" data-flags="${flags}" data-tip="${tip.replace(/"/g,'&quot;')}">
+    <div class="who"><b>${mc.metric}</b><small>${short(mc.resourceAddress)}</small></div>
+    <div class="lane" aria-hidden="true">${ticks}${band}${lim}${dot}</div>
+    <div class="val"><b>${big}</b><small>${sub}</small>${b?'<span class="pill breach">LIMIT BREACHED</span>':`<span class="pill ${cls}">${lab}</span>`}</div>
+  </div>`;
+}).join('');
+document.querySelectorAll('.filters button').forEach(btn=>btn.addEventListener('click',()=>{
+  document.querySelectorAll('.filters button').forEach(b=>b.setAttribute('aria-pressed',b===btn));
+  const f=btn.dataset.f;
+  rowsEl.querySelectorAll('.row').forEach(r=>{r.hidden = f!=='all' && !r.dataset.flags.split(' ').includes(f)});
+}));
+
+/* verdict */
+$('#stamp').textContent = CMP.verdict==='REJECT'?'REJECTED':'APPROVED';
+$('#reason').textContent = CMP.reason;
+$('#nbreach').textContent = CMP.breaches.length;
+$('#acc').textContent = Math.round(CMP.predictionAccuracy*100)+'%';
+$('#breaches').innerHTML = CMP.breaches.map(b=>{
+  const o = OBS[b.resourceAddress+'|'+b.metric], pct = b.limitKind==='change_pct';
+  const ratio = pct ? Math.min(1,b.actualValue/(b.limit*4)) : 1;
+  return `<article class="breach ${b.severity==='HIGH'?'':'med'}">
+    <div class="t"><span>${short(b.resourceAddress)}</span><span>${b.severity}</span></div>
+    <h3>${b.metric}</h3><p>${b.description}</p>
+    <div class="m"><i style="width:${ratio*100}%"></i></div>
+    <div class="n"><span>${pct?fmtPct(b.actualValue):b.actualValue+' '+(o?o.unit:'')}</span><span>limit ${b.limit}${pct?'%':''}</span></div>
+  </article>`;
+}).join('');
+
+/* pipeline status: hand-maintained, mirrors the integration handoff */
+const STAGES=[
+ ['Parse the change','Reads real terraform show -json output and rejects malformed plans.','works','WORKS'],
+ ['Resolve blast radius','Breadth-first walk with per-edge propagation. Local fixture by default. The Neptune adapter returns identical paths.','works','WORKS'],
+ ['Predict impact','13 metric bands, a rule trace and a confidence. Fails loudly on unknown resources.','works','WORKS'],
+ ['Provision and measure','Test environment, baseline run, single-attribute apply, changed run, teardown.','built','BUILT, NEVER RUN'],
+ ['Collect telemetry','CloudWatch GetMetricData source with paging and empty-not-zero handling. 12 tests.','off','OFFLINE-TESTED'],
+ ['Compare to limits','Safety limits on measured values decide. Prediction accuracy is scored separately.','works','WORKS'],
+ ['Store evidence','Local JSON today. S3 and DynamoDB storage is built as a separate platform.','local','LOCAL ONLY'],
+ ['Explain','Deterministic prose by default. The Bedrock adapter is built, figure-checked and tested offline.','off','BEDROCK ADAPTER READY']
+];
+$('#pipe').innerHTML = STAGES.map((s,i)=>`<div class="st"><small>${String(i+1).padStart(2,'0')}</small><h3>${s[0]}</h3><p>${s[1]}</p><span class="tag ${s[2]}">${s[3]}</span></div>`).join('');
+$('#svc').innerHTML = ['CloudWatch','Lambda','SQS','DynamoDB','S3','IAM','Step Functions','Terraform'].map(x=>`<span>${x}</span>`).join('')+['Bedrock','Neptune'].map(x=>`<span class="dim">${x} &middot; adapter built</span>`).join('');
+
+
+
+/* live local engine */
+(function(){
+  const range=$('#trange'), num=$('#tnum'), after=$('#tafter'), eng=$('#eng'), engtxt=$('#engtxt');
+  const rowsT=$('#trows'), served = location.protocol.startsWith('http');
+  rowsT.innerHTML = E.prediction.predictedMetrics.map(m=>`<div class="row" data-k="${m.resourceAddress}|${m.metric}">
+    <div class="who"><b>${m.metric}</b><small>${short(m.resourceAddress)}</small></div>
+    <div class="lane" aria-hidden="true">${TICKS.map(t=>`<span class="tick" style="left:${sx(t)}%"><em>${t}%</em></span>`).join('')}<span class="band" style="left:0;width:0"></span></div>
+    <div class="val"><b>&mdash;</b></div></div>`).join('');
+  const dimc={NONE:'var(--ink-2)',LOW:'var(--green)',MEDIUM:'var(--amber)',HIGH:'var(--red)',CRITICAL:'var(--red)'};
+  let seq=0, timer;
+  async function run(v){
+    const my=++seq;
+    try{
+      const r=await fetch('/api/predict?after='+v,{cache:'no-store'}); const j=await r.json();
+      if(my!==seq) return;
+      eng.classList.add('on'); engtxt.textContent='local engine connected \u00B7 127.0.0.1';
+      if(!r.ok){ $('#terr').hidden=false; $('#terr').textContent=j.error; $('#tout').classList.add('dim'); $('#tnote').textContent=''; return }
+      $('#terr').hidden=true; $('#tout').classList.remove('dim');
+      const P=j.prediction, rule=P.rulesFired[0];
+      const s=$('#tsev'); s.textContent=P.severity; s.dataset.s=P.severity;
+      $('#tmult').textContent=rule.inputs.multiplier.toFixed(1)+'\u00D7 concurrency';
+      $('#trad').textContent=P.blastRadius.resourceCount+' resources in blast radius \u00B7 confidence '+Math.round(P.confidence*100)+'%';
+      $('#tdims').innerHTML=Object.entries(P.dimensions).map(([k,v])=>`<div style="border:1px solid var(--line);border-radius:14px;padding:12px 14px"><div class="eyebrow">${k}</div><div class="mono" style="font-weight:600;margin-top:8px;color:${dimc[v]}">${v}</div></div>`).join('');
+      P.predictedMetrics.forEach(m=>{
+        const row=rowsT.querySelector(`[data-k="${m.resourceAddress}|${m.metric}"]`); if(!row) return;
+        const b=row.querySelector('.band'); b.style.left=sx(m.expectedChangePctLow)+'%'; b.style.width=Math.max(.8,sx(m.expectedChangePctHigh)-sx(m.expectedChangePctLow))+'%';
+        row.querySelector('.val b').textContent=fmtPct(m.expectedChangePctLow)+' to '+fmtPct(m.expectedChangePctHigh);
+      });
+      $('#tnote').innerHTML = j.recordedRun
+        ? '<b>This is the recorded experiment.</b> Its measured result is in the evidence below: REJECTED, with simulated telemetry.'
+        : '<b>Prediction only.</b> No measurement exists for '+j.after+'. The recorded, measured run is the 10 \u2192 100 change.';
+    }catch(e){
+      if(my!==seq) return; eng.classList.remove('on');
+      engtxt.textContent = served ? 'engine not responding' : 'engine offline \u00B7 run: python scripts/serve.py';
+      $('#terr').hidden=false; $('#terr').textContent = served ? 'The local engine did not answer.' : 'Open this page through the local engine to make it live: python scripts/serve.py';
+      $('#tout').classList.add('dim');
+    }
+  }
+  function set(v,from){ v=Math.max(1,Math.min(1000,Math.round(+v)||1)); after.textContent=v; if(from!=='range') range.value=Math.min(300,v); if(from!=='num') num.value=v;
+    clearTimeout(timer); timer=setTimeout(()=>run(v),110); }
+  range.addEventListener('input',()=>set(range.value,'range'));
+  num.addEventListener('input',()=>set(num.value,'num'));
+  $('#presets').innerHTML=[[12,'12 \u00B7 small'],[25,'25 \u00B7 moderate'],[100,'100 \u00B7 recorded'],[400,'400 \u00B7 extreme'],[5,'5 \u00B7 a decrease']].map(([v,l])=>`<button type="button" data-v="${v}">${l}</button>`).join('');
+  $('#presets').addEventListener('click',e=>{const b=e.target.closest('button'); if(b) set(b.dataset.v)});
+  set(100);
+})();
+
+/* explanation + backends */
+(function(){
+  const B = X.backends || {graph:'local',explainer:'local'};
+  const opt=(label,on,ready)=>`<span class="opt ${on?'on':(ready?'ready':'')}">${label}${on?' · ACTIVE':(ready?' · ADAPTER READY':'')}</span>`;
+  $('#gopts').innerHTML = opt('Local fixture',B.graph==='local')+opt('Amazon Neptune',B.graph==='neptune',B.graph!=='neptune');
+  $('#eopts').innerHTML = opt('Deterministic templates',B.explainer==='local')+opt('Amazon Bedrock',B.explainer.startsWith('bedrock'),!B.explainer.startsWith('bedrock'));
+  const isB = B.explainer.startsWith('bedrock'); const bed = isB && B.explainerSource==='bedrock';
+  $('#exfile').textContent = 'explanation.'+B.explainer+'.txt';
+  $('#exsrc').textContent = bed ? 'BEDROCK · '+(B.model||'') : (isB ? 'FALLBACK · FIGURES REJECTED' : 'DETERMINISTIC · NO MODEL');
+  const lines = (X.explanation||'').split('\n');
+  const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;');
+  const html = lines.map(l=>{
+    if(/^[A-Z][A-Z ()\-:.a-z_]*$/.test(l) && l===l.toUpperCase() && l.trim()) return '<span class="h">'+esc(l)+'</span>';
+    if(/REJECTED|\[HIGH\]|DECISION/.test(l)) return '<span class="r">'+esc(l)+'</span>';
+    if(/WARNING|SIMULATED|Underestimated/.test(l)) return '<span class="w">'+esc(l)+'</span>';
+    return esc(l);
+  });
+  const pre=$('#extext'); pre.innerHTML = html.join('\n');
+  if(!reduce && 'IntersectionObserver' in window){
+    const io=new IntersectionObserver(es=>{ if(!es[0].isIntersecting) return; io.disconnect();
+      const full=html.join('\n'), plain=lines.join('\n'); let n=0;
+      (function step(){ n=Math.min(plain.length,n+14);
+        // reveal by whole lines so the coloured spans stay well-formed
+        const shown = plain.slice(0,n).split('\n').length; pre.innerHTML = html.slice(0,shown).join('\n');
+        if(n<plain.length) requestAnimationFrame(step); else pre.innerHTML=full; })();
+    },{threshold:.3}); io.observe($('#ex'));
+  }
+  document.querySelectorAll('[data-copy]').forEach(b=>b.addEventListener('click',()=>{
+    try{navigator.clipboard.writeText(b.dataset.copy)}catch(_){}; b.textContent='COPIED'; setTimeout(()=>b.textContent='COPY',1400);
+  }));
+})();
+
+
+/* stats count-up */
+(function(){
+  const vals={RES:E.prediction.blastRadius.resourceCount,MET:E.observation.metrics.length,BR:CMP.breaches.length,ACC:Math.round(CMP.predictionAccuracy*100)};
+  const els=[...document.querySelectorAll('#stats b')], keys=['RES','MET','BR','ACC'];
+  els.forEach((el,i)=>{el.dataset.to=vals[keys[i]];el.textContent=vals[keys[i]]+(el.dataset.suf||'')});
+  if(reduce||!('IntersectionObserver' in window)) return;
+  const io=new IntersectionObserver(es=>{ if(!es[0].isIntersecting) return; io.disconnect();
+    els.forEach(el=>{const to=+el.dataset.to,t0=performance.now(),suf=el.dataset.suf||'';
+      (function f(t){const p=Math.min(1,(t-t0)/1300),e=1-Math.pow(1-p,4);el.textContent=Math.round(to*e)+suf;if(p<1)requestAnimationFrame(f)})(t0)});
+  },{threshold:.5}); io.observe($('#stats'));
+})();
+
+/* architecture diagram */
+(function(){
+  const svg=$('#arch'), NS='http://www.w3.org/2000/svg', W=200, H=96;
+  const N=[
+   {id:'tf',x:20,y:70,t:'Terraform plan',tag:'INPUT',c:[['Terraform CLI','local']],d:'The proposed change, as real terraform show -json output. It is treated as untrusted input: a malformed or unknown plan is rejected loudly, never guessed at.',f:'backend/lambda/changeproof/parser.py'},
+   {id:'parse',x:250,y:70,t:'Parse & validate',tag:'DECIDE',c:[['Python','local']],d:'Turns the plan into a typed change set and refuses anything it does not understand.',f:'parser.py'},
+   {id:'graph',x:480,y:70,t:'Dependency graph',tag:'DECIDE',c:[['Local fixture','local'],['Neptune','ready']],d:'What depends on what. Runs from a local graph today. An Amazon Neptune adapter reads the same relationships over openCypher and a parity test proves it returns identical paths. Neptune is not provisioned: it bills while idle.',f:'backend/aws_adapters/neptune_graph.py'},
+   {id:'predict',x:710,y:70,t:'Predict impact',tag:'DECIDE',c:[['Rules + thresholds','local']],d:'Deterministic rules turn the change and the blast radius into 13 predicted metric ranges, with the rule that fired and a confidence.',f:'backend/lambda/changeproof/predict.py'},
+   {id:'compare',x:940,y:70,t:'Compare & verdict',tag:'DECIDE',c:[['Safety limits','local']],d:'Only measured values against explicit safety limits produce APPROVE or REJECT. Prediction accuracy is scored separately and never decides.',f:'backend/lambda/changeproof/compare.py'},
+   {id:'test',x:480,y:300,t:'Test environment',tag:'MEASURE',c:[['Lambda','built'],['SQS','built'],['DynamoDB','built']],d:'An isolated stack with a producer, a queue and a worker. It is measured at the baseline setting, changed by one attribute, and measured again. Built and tested offline. It has not been applied against an account yet.',f:'workload/driver/'},
+   {id:'cw',x:710,y:300,t:'CloudWatch',tag:'MEASURE',c:[['GetMetricData','tested'],['IAM','tested']],d:'Reads 13 real metrics for both runs through a read-only identity that holds one permission. Empty series stay empty and are never turned into zeros, so an idle resource cannot cause a false reject.',f:'backend/telemetry_aws/cloudwatch.py'},
+   {id:'store',x:940,y:300,t:'Evidence store',tag:'KEEP',c:[['Local JSON','local'],['S3','built'],['DynamoDB','built']],d:'The full evidence bundle, written locally today. A separate S3 and DynamoDB platform holds it durably, with encryption, versioning and a single-table design.',f:'backend/storage/ (feat/changeproof-storage)'},
+   {id:'explain',x:940,y:490,t:'Explain',tag:'EXPLAIN',c:[['Templates','local'],['Bedrock','ready'],['Lambda','ready']],d:'Deterministic prose by default. A Bedrock function restates the evidence, and every number in its answer is checked against that evidence. An invented figure gets the answer thrown away. The adapter is built and tested; live Bedrock calls are blocked by an account restriction.',f:'backend/aws_adapters/lambda_explain.py'},
+   {id:'ui',x:710,y:490,t:'Dashboard',tag:'SHOW',c:[['Local server','local']],d:'This page. A small local server runs the real engine so the prediction on the page moves as you change the value.',f:'frontend/ and scripts/serve.py'}
+  ];
+  const cx=n=>n.x+W/2, by=n=>n.y+H, get=id=>N.find(n=>n.id===id);
+  const E2=[['tf','parse','h'],['parse','graph','h'],['graph','predict','h'],['predict','compare','h'],['predict','test','d1'],['test','cw','h'],['cw','compare','u'],['compare','store','v'],['store','explain','v'],['explain','ui','hl']];
+  const path=(a,b,k)=>{a=get(a);b=get(b);
+    if(k==='h') return `M${a.x+W},${a.y+H/2} L${b.x},${b.y+H/2}`;
+    if(k==='hl') return `M${a.x},${a.y+H/2} L${b.x+W},${b.y+H/2}`;
+    if(k==='v') return `M${cx(a)},${by(a)} L${cx(b)},${b.y}`;
+    if(k==='d1') return `M${cx(a)-30},${by(a)} C${cx(a)-30},${by(a)+80} ${cx(b)},${b.y-80} ${cx(b)},${b.y}`;
+    if(k==='u') return `M${cx(a)+30},${a.y} C${cx(a)+30},${a.y-70} ${cx(b)-40},${by(b)+70} ${cx(b)-40},${by(b)}`; };
+  const mk=(t,a)=>{const e=document.createElementNS(NS,t); for(const k in a) e.setAttribute(k,a[k]); return e};
+  const defs=mk('defs',{}); defs.innerHTML='<marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--ink-2)"/></marker>'; svg.appendChild(defs);
+  [['LOCAL DECISION ENGINE',20,40],['AWS MEASUREMENT',20,270],['EVIDENCE AND EXPLANATION',20,460]].forEach(([t,x,y])=>{const e=mk('text',{x,y,class:'lane-l'});e.textContent=t;svg.appendChild(e)});
+  const edges=E2.map(([a,b,k])=>{const p=mk('path',{d:path(a,b,k),class:'ed flow','marker-end':'url(#ah)'});svg.appendChild(p);return p});
+  const nodes={};
+  N.forEach(n=>{
+    const g=mk('g',{class:'nd',tabindex:0,role:'button','aria-label':n.t}); g.setAttribute('transform',`translate(${n.x},${n.y})`);
+    g.appendChild(mk('rect',{class:'b',width:W,height:H,rx:16}));
+    const tg=mk('text',{class:'tg',x:16,y:24}); tg.textContent=n.tag; g.appendChild(tg);
+    const tt=mk('text',{class:'tt',x:16,y:50}); tt.textContent=n.t; g.appendChild(tt);
+    let x=16; n.c.forEach(([label,kind])=>{const w=label.length*5.6+13, c=mk('g',{class:'ch '+kind,transform:`translate(${x},64)`});
+      c.appendChild(mk('rect',{width:w,height:20,rx:10})); const tx=mk('text',{x:8,y:14}); tx.textContent=label; c.appendChild(tx); g.appendChild(c); x+=w+6});
+    svg.appendChild(g); nodes[n.id]=g;
+    const pick=()=>show(n.id); g.addEventListener('mouseenter',pick); g.addEventListener('focus',pick); g.addEventListener('click',pick);
+    g.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();pick()}});
+  });
+  const KL={local:'RUNNING LOCALLY',built:'AWS · BUILT, NOT RUN',tested:'AWS · OFFLINE-TESTED',ready:'ADAPTER READY'};
+  function show(id){
+    Object.entries(nodes).forEach(([k,g])=>g.classList.toggle('sel',k===id));
+    const n=get(id);
+    $('#detail').innerHTML=`<div><div class="eyebrow">${n.tag}</div><h3>${n.t}</h3><div class="chips">${n.c.map(([l,k])=>`<span class="${k}">${l} \u00B7 ${KL[k]}</span>`).join('')}</div></div><div><p>${n.d}</p><p><code>${n.f}</code></p></div>`;
+  }
+  show('cw');
+  /* a run travelling through the pipeline */
+  const order=['tf','parse','graph','predict','test','cw','compare','store','explain','ui'];
+  if(!reduce){ let i=0; setInterval(()=>{Object.values(nodes).forEach(g=>g.classList.remove('pulse')); nodes[order[i%order.length]].classList.add('pulse'); i++;},900); }
+  else edges.forEach(e=>e.classList.remove('flow'));
+})();
+
+/* cursor spotlight on cards */
+document.addEventListener('mousemove',e=>{
+  const c=e.target.closest&&e.target.closest('.card,.st,.bkc,.gcard,.meter'); if(!c) return;
+  const r=c.getBoundingClientRect(); c.style.setProperty('--mx',(e.clientX-r.left)+'px'); c.style.setProperty('--my',(e.clientY-r.top)+'px');
+});
+
+/* theme */
+const root=document.documentElement;
+$('#theme').addEventListener('click',()=>{
+  const dark = root.dataset.theme? root.dataset.theme==='dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+  root.dataset.theme = dark?'light':'dark'; palette();
+});
+
+/* tooltip + cursor ring */
+const tip=$('#tip'), ring=$('#ring');
+rowsEl.addEventListener('mousemove',e=>{
+  const r=e.target.closest('.row'); if(!r){tip.style.opacity=0;return}
+  tip.textContent=r.dataset.tip; tip.style.whiteSpace='pre-line';
+  tip.style.left=Math.min(innerWidth-300,e.clientX+16)+'px'; tip.style.top=(e.clientY+16)+'px'; tip.style.opacity=1;
+});
+rowsEl.addEventListener('mouseleave',()=>tip.style.opacity=0);
+if(matchMedia('(pointer:fine)').matches && !reduce){
+  let x=innerWidth/2,y=innerHeight/2,tx=x,ty=y;
+  addEventListener('mousemove',e=>{tx=e.clientX;ty=e.clientY;ring.style.opacity=1});
+  (function f(){x+=(tx-x)*.18;y+=(ty-y)*.18;ring.style.transform=`translate(${x}px,${y}px)`;requestAnimationFrame(f)})();
+  document.addEventListener('mouseover',e=>ring.classList.toggle('big',!!e.target.closest('a,button,.row,.st,.breach')));
+}
+
+/* scroll-triggered motion, with the resting state already correct */
+if(!reduce && 'IntersectionObserver' in window){
+  const io=new IntersectionObserver(es=>es.forEach(en=>{
+    if(!en.isIntersecting) return; io.unobserve(en.target); en.target.dispatchEvent(new Event('enter'));
+  }),{threshold:.25});
+  const chg=$('#change .diff'); chg.addEventListener('enter',()=>{roll($('#from'),CH.before,900);roll($('#to'),CH.after,1500)},{once:true}); io.observe(chg);
+  const lanes=$('#rows'); lanes.addEventListener('enter',()=>{
+    lanes.querySelectorAll('.band').forEach((b,i)=>b.animate([{transform:'scaleX(0)'},{transform:'scaleX(1)'}],{duration:700,delay:i*50,easing:'cubic-bezier(.2,.8,.2,1)',fill:'backwards'}));
+    lanes.querySelectorAll('.dot').forEach((d,i)=>d.animate([{transform:'scale(0)'},{transform:'scale(1)'}],{duration:500,delay:400+i*50,easing:'cubic-bezier(.3,1.6,.5,1)',fill:'backwards'}));
+  },{once:true}); io.observe(lanes);
+  const v=$('#verdict .vgrid'); v.addEventListener('enter',()=>{
+    $('#stamp').classList.add('slam');
+    document.querySelectorAll('.breach .m i').forEach((i,k)=>i.animate([{transform:'scaleX(0)'},{transform:'scaleX(1)'}],{duration:800,delay:300+k*120,easing:'cubic-bezier(.2,.8,.2,1)',fill:'backwards'}));
+  },{once:true}); io.observe(v);
+  const u=$('#under'); u.animate([{strokeDashoffset:1},{strokeDashoffset:0}],{duration:900,delay:500,easing:'ease-out',fill:'backwards'});
+}
+
+/* hero graph: the change propagating along the real dependency paths */
+let P={};
+function palette(){const c=getComputedStyle(root);['ink','ink-2','line','blue','red','panel','paper'].forEach(k=>P[k]=c.getPropertyValue('--'+k).trim())}
+palette();
+(function(){
+  const cv=$('#graph'), ctx=cv.getContext('2d');
+  const paths=E.prediction.blastRadius.paths, chain=['aws_lambda_function.api'];
+  const deepest=paths.reduce((a,b)=>b.depth>a.depth?b:a);
+  deepest.hops.forEach(h=>chain.push(h.target));
+  const factor={'aws_lambda_function.api':1}; paths.forEach(p=>factor[p.target]=p.propagation);
+  const layout=[[.15,.62],[.4,.22],[.62,.72],[.8,.3]];
+  const nodes=chain.map((a,i)=>({a,x:layout[i][0],y:layout[i][1],f:factor[a]??1,rel:i? deepest.hops[i-1].relation:''}));
+  let W,H,dpr;
+  const size=()=>{dpr=Math.min(2,devicePixelRatio||1);const r=cv.getBoundingClientRect();W=r.width;H=r.height;cv.width=W*dpr;cv.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0)};
+  addEventListener('resize',()=>{size();draw(last)}); size();
+  const pos=n=>[n.x*W,n.y*H];
+  function curve(a,b,t){const [x1,y1]=pos(a),[x2,y2]=pos(b),mx=(x1+x2)/2,c1=[mx,y1],c2=[mx,y2];
+    const u=1-t;return [u*u*u*x1+3*u*u*t*c1[0]+3*u*t*t*c2[0]+t*t*t*x2,u*u*u*y1+3*u*u*t*c1[1]+3*u*t*t*c2[1]+t*t*t*y2]}
+  let last=0;
+  function draw(time){
+    last=time; ctx.clearRect(0,0,W,H);
+    ctx.fillStyle=P.line; for(let gx=20;gx<W;gx+=28)for(let gy=20;gy<H;gy+=28){ctx.fillRect(gx,gy,1.5,1.5)}
+    const cycle=7000, T=reduce?1:((time%cycle)/cycle), seg=1/(nodes.length-1)*.86;
+    /* edges */
+    for(let i=0;i<nodes.length-1;i++){
+      const a=nodes[i],b=nodes[i+1],[x1,y1]=pos(a),[x2,y2]=pos(b),mx=(x1+x2)/2;
+      ctx.beginPath();ctx.moveTo(x1,y1);ctx.bezierCurveTo(mx,y1,mx,y2,x2,y2);ctx.strokeStyle=P.line;ctx.lineWidth=2;ctx.stroke();
+      const s=i*seg, p=Math.max(0,Math.min(1,(T-s)/seg));
+      if(p>0){ctx.beginPath();ctx.moveTo(x1,y1);
+        for(let k=1;k<=40;k++){const [px,py]=curve(a,b,p*k/40);ctx.lineTo(px,py)}
+        ctx.strokeStyle=P.red;ctx.lineWidth=3;ctx.stroke();
+        if(p<1){const [px,py]=curve(a,b,p);ctx.beginPath();ctx.arc(px,py,6,0,7);ctx.fillStyle=P.red;ctx.fill()}}
+      ctx.font='500 11px '+getComputedStyle(document.body).getPropertyValue('--mono');ctx.fillStyle=P['ink-2'];ctx.textAlign='center';
+      const mid=curve(a,b,.5);ctx.fillText(b.rel,mid[0],mid[1]-10);
+    }
+    /* nodes */
+    nodes.forEach((n,i)=>{
+      const [x,y]=pos(n), hit=i===0?0:(i-1)*seg+seg, lit=Math.max(0,Math.min(1,(T-hit)/.06));
+      const ring=Math.max(0,Math.min(1,(T-hit)/.25)), r0=W*.03;
+      if(i===0||lit>0){ctx.beginPath();ctx.arc(x,y,r0+ring*W*.06*n.f,0,7);ctx.strokeStyle=P.red;ctx.globalAlpha=(1-ring)*.7+.08;ctx.lineWidth=2;ctx.stroke();ctx.globalAlpha=1}
+      ctx.beginPath();ctx.arc(x,y,r0,0,7);ctx.fillStyle=(i===0||lit>.5)?P.red:P.panel;ctx.fill();ctx.lineWidth=2.5;ctx.strokeStyle=P.ink;ctx.stroke();
+      ctx.font='600 12px '+getComputedStyle(document.body).getPropertyValue('--mono');ctx.textAlign='center';ctx.fillStyle=P.ink;
+      ctx.fillText(short(n.a),x,y+r0+20);
+      if(i){ctx.font='500 11px '+getComputedStyle(document.body).getPropertyValue('--mono');ctx.fillStyle=P['ink-2'];ctx.fillText('propagation '+n.f,x,y+r0+36)}
+      else{ctx.font='500 11px '+getComputedStyle(document.body).getPropertyValue('--mono');ctx.fillStyle=P.red;ctx.fillText('origin · '+CH.before+' → '+CH.after,x,y+r0+36)}
+    });
+  }
+  if(reduce)draw(0);else(function loop(t){draw(t);requestAnimationFrame(loop)})(0);
+})();
+if(still) addEventListener('load',()=>{document.title='H'+document.documentElement.scrollHeight});
+</script>
+</body>
+</html>
