@@ -6,8 +6,11 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[2]
 LAMBDA_ROOT = REPO_ROOT / "backend" / "lambda"
 
-if str(LAMBDA_ROOT) not in sys.path:
-    sys.path.insert(0, str(LAMBDA_ROOT))
+BACKEND_ROOT = REPO_ROOT / "backend"
+
+for _root in (LAMBDA_ROOT, BACKEND_ROOT):
+    if str(_root) not in sys.path:
+        sys.path.insert(0, str(_root))
 
 
 @pytest.fixture(scope="session")
