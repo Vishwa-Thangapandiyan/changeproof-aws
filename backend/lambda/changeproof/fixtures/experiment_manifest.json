@@ -1,0 +1,195 @@
+{
+  "$fixture": "TEST FIXTURE - hand-authored to match the shape workload/driver/cli.py writes for a completed experiment. NO EXPERIMENT HAS BEEN RUN: no AWS resource named here exists, no workload was driven, and every number below was written by hand rather than measured. Its only purpose is to give the manifest parser a realistic document to parse offline.",
+  "$shape": "Keys mirror workload.driver.models to_dict() output exactly. Fields the engine does not read (workload, result, timestamps, drained, dlqDepth, comparability, teardown) are present on purpose, so the parser is exercised against the full document rather than a trimmed one.",
+  "experimentId": "EXP-FIXTURE-001",
+  "source": "aws-experiment",
+  "simulated": false,
+  "startedAt": "2026-09-20T12:00:00Z",
+  "environment": {
+    "experimentId": "EXP-FIXTURE-001",
+    "region": "us-east-1",
+    "environmentSuffix": "exp-fixture-001",
+    "terraformDir": ".changeproof/experiments/EXP-FIXTURE-001/terraform",
+    "statePath": ".changeproof/experiments/EXP-FIXTURE-001/terraform/terraform.tfstate",
+    "configuration": {
+      "reserved_concurrency": 10,
+      "worker_concurrency": 5
+    },
+    "createdAt": "2026-09-20T12:00:00Z",
+    "deadLetterQueueUrl": "https://sqs.us-east-1.amazonaws.com/000000000000/changeproof-exp-fixture-001-work-dlq",
+    "resources": [
+      {
+        "graphAddress": "aws_lambda_function.api",
+        "resourceType": "aws_lambda_function",
+        "physicalName": "changeproof-exp-fixture-001-api",
+        "cloudwatch": {
+          "namespace": "AWS/Lambda",
+          "dimensions": [
+            {
+              "Name": "FunctionName",
+              "Value": "changeproof-exp-fixture-001-api"
+            }
+          ]
+        },
+        "arn": "arn:aws:lambda:us-east-1:000000000000:function:changeproof-exp-fixture-001-api",
+        "logGroup": "/aws/lambda/changeproof-exp-fixture-001-api"
+      },
+      {
+        "graphAddress": "aws_sqs_queue.work",
+        "resourceType": "aws_sqs_queue",
+        "physicalName": "changeproof-exp-fixture-001-work",
+        "cloudwatch": {
+          "namespace": "AWS/SQS",
+          "dimensions": [
+            {
+              "Name": "QueueName",
+              "Value": "changeproof-exp-fixture-001-work"
+            }
+          ]
+        },
+        "arn": "arn:aws:sqs:us-east-1:000000000000:changeproof-exp-fixture-001-work",
+        "queueUrl": "https://sqs.us-east-1.amazonaws.com/000000000000/changeproof-exp-fixture-001-work"
+      },
+      {
+        "graphAddress": "aws_lambda_function.worker",
+        "resourceType": "aws_lambda_function",
+        "physicalName": "changeproof-exp-fixture-001-worker",
+        "cloudwatch": {
+          "namespace": "AWS/Lambda",
+          "dimensions": [
+            {
+              "Name": "FunctionName",
+              "Value": "changeproof-exp-fixture-001-worker"
+            }
+          ]
+        },
+        "arn": "arn:aws:lambda:us-east-1:000000000000:function:changeproof-exp-fixture-001-worker",
+        "logGroup": "/aws/lambda/changeproof-exp-fixture-001-worker"
+      },
+      {
+        "graphAddress": "aws_dynamodb_table.orders",
+        "resourceType": "aws_dynamodb_table",
+        "physicalName": "changeproof-exp-fixture-001-orders",
+        "cloudwatch": {
+          "namespace": "AWS/DynamoDB",
+          "dimensions": [
+            {
+              "Name": "TableName",
+              "Value": "changeproof-exp-fixture-001-orders"
+            }
+          ]
+        },
+        "arn": "arn:aws:dynamodb:us-east-1:000000000000:table/changeproof-exp-fixture-001-orders"
+      }
+    ]
+  },
+  "baseline": {
+    "runId": "EXP-FIXTURE-001-baseline",
+    "label": "baseline",
+    "configuration": {
+      "reserved_concurrency": 10,
+      "worker_concurrency": 5
+    },
+    "workload": {
+      "attempts": 3000,
+      "durationSeconds": 60,
+      "payloadBytes": 256,
+      "warmupAttempts": 50,
+      "clientConcurrency": 64,
+      "targetRatePerSecond": 50.0
+    },
+    "workloadFingerprint": "c8169780aba07235",
+    "result": {
+      "attempted": 3000,
+      "accepted": 412,
+      "throttled": 2588,
+      "failed": 0,
+      "offeredRatePerSecond": 49.2,
+      "deliveredRatePerSecond": 6.756,
+      "slowestAttemptMs": 318.4
+    },
+    "timestamps": {
+      "startedAt": "2026-09-20T12:04:00Z",
+      "attemptsStartedAt": "2026-09-20T12:04:12Z",
+      "attemptsEndedAt": "2026-09-20T12:05:13Z",
+      "drainedAt": "2026-09-20T12:06:41Z"
+    },
+    "metricWindow": {
+      "startIso": "2026-09-20T12:04:00Z",
+      "endIso": "2026-09-20T12:08:00Z",
+      "startEpoch": 1789905840,
+      "endEpoch": 1789906080
+    },
+    "drained": true,
+    "dlqDepth": 0,
+    "notes": []
+  },
+  "changed": {
+    "runId": "EXP-FIXTURE-001-changed",
+    "label": "changed",
+    "configuration": {
+      "reserved_concurrency": 100,
+      "worker_concurrency": 5
+    },
+    "workload": {
+      "attempts": 3000,
+      "durationSeconds": 60,
+      "payloadBytes": 256,
+      "warmupAttempts": 50,
+      "clientConcurrency": 64,
+      "targetRatePerSecond": 50.0
+    },
+    "workloadFingerprint": "c8169780aba07235",
+    "result": {
+      "attempted": 3000,
+      "accepted": 2994,
+      "throttled": 6,
+      "failed": 0,
+      "offeredRatePerSecond": 49.6,
+      "deliveredRatePerSecond": 49.501,
+      "slowestAttemptMs": 502.7
+    },
+    "timestamps": {
+      "startedAt": "2026-09-20T12:10:00Z",
+      "attemptsStartedAt": "2026-09-20T12:11:08Z",
+      "attemptsEndedAt": "2026-09-20T12:12:09Z",
+      "drainedAt": "2026-09-20T12:15:52Z"
+    },
+    "metricWindow": {
+      "startIso": "2026-09-20T12:11:00Z",
+      "endIso": "2026-09-20T12:17:00Z",
+      "startEpoch": 1789906260,
+      "endEpoch": 1789906620
+    },
+    "drained": true,
+    "dlqDepth": 0,
+    "notes": [
+      "applied aws_lambda_function.api.reserved_concurrent_executions: 10 -> 100 (single-attribute update, verified against the plan)"
+    ]
+  },
+  "comparability": {
+    "workloadFingerprintMatch": true,
+    "attemptDeltaPct": 0.0,
+    "bothRunsDrained": true,
+    "deadLetters": {
+      "baseline": 0,
+      "changed": 0
+    },
+    "configurationDeltaKeys": [
+      "reserved_concurrency"
+    ],
+    "singleVariable": true,
+    "order": [
+      "baseline",
+      "changed"
+    ],
+    "windowSecondsBaseline": 240,
+    "windowSecondsChanged": 360
+  },
+  "teardown": {
+    "destroyedAt": "2026-09-20T12:18:30Z",
+    "resourcesDestroyed": 14,
+    "stateEmpty": true,
+    "notes": []
+  }
+}

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from ..graph import DependencyGraph
 from ..models import (
@@ -18,6 +19,10 @@ from ..models import (
     Severity,
     Verdict,
 )
+
+if TYPE_CHECKING:  # imported for typing only, so this module stays import-light
+    from ..manifest import ExperimentManifest, MetricWindow
+    from ..telemetry import MetricQuery
 
 FIXTURES = Path(__file__).resolve().parent.parent / "fixtures"
 
@@ -70,6 +75,58 @@ class FixtureTelemetrySource:
             source=f"fixture:{self._path.name}",
             simulated=True,
             metrics=metrics,
+        )
+
+
+class StaticMetricDataSource:
+    """Datapoints from a local JSON fixture. Satisfies `telemetry.MetricDataSource`.
+
+    These are *not* CloudWatch measurements. They are hand-authored series standing
+    in for what GetMetricData would return, so the collector's query building and
+    folding can be exercised with no account and no credentials.
+
+    A metric absent from the fixture yields no datapoints, which is what CloudWatch
+    does for an idle resource. That is a real answer, not an error, and the collector
+    omits the metric rather than inventing a zero.
+
+    Phase 1 replaces this with a boto3-backed source. The collector does not change.
+    """
+
+    def __init__(self, manifest: "ExperimentManifest", path: str | Path | None = None) -> None:
+        self._manifest = manifest
+        self._path = Path(path) if path is not None else FIXTURES / "cloudwatch_responses.json"
+
+    def fetch(
+        self, queries: "tuple[MetricQuery, ...]", window: "MetricWindow"
+    ) -> dict[str, list[float]]:
+        label = self._label_for(window)
+        document = json.loads(self._path.read_text(encoding="utf-8"))
+
+        series = document.get("windows", {}).get(label)
+        if not isinstance(series, dict):
+            raise ValueError(f"{self._path} has no '{label}' window")
+
+        results: dict[str, list[float]] = {}
+        for query in queries:
+            values = series.get(query.resource_address, {}).get(query.metric)
+            if values is None:
+                continue
+            results[query.query_id] = [float(value) for value in values]
+        return results
+
+    def _label_for(self, window: "MetricWindow") -> str:
+        """Which run this window belongs to, by matching the manifest's own windows.
+
+        Matching on the window rather than trusting call order means a caller that
+        asks for the two windows out of order still gets the right series.
+        """
+        if window == self._manifest.baseline_window:
+            return "baseline"
+        if window == self._manifest.changed_window:
+            return "changed"
+        raise ValueError(
+            f"window {window.start_epoch}-{window.end_epoch} belongs to neither run "
+            f"of experiment {self._manifest.experiment_id}"
         )
 
 
