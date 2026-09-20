@@ -1,12 +1,17 @@
 """Every threshold and modelling constant in the system, in one auditable place.
 
-Two distinct families live here and must not be confused:
+Three distinct families live here and must not be confused:
 
 `PREDICTION_*` shape what ChangeProof expects to happen. Being wrong about them
 costs accuracy, not safety.
 
 `SAFETY_LIMITS` decide whether an observed outcome is acceptable. They are the
 verdict. They are applied to measured values only, never to predictions.
+
+`METRIC_DEFINITIONS` say how each metric is read out of CloudWatch: which
+statistic collapses the window, what unit the number is in, and any dimension the
+metric needs beyond the ones that identify the resource. They describe collection,
+not risk, and nothing here decides anything.
 """
 
 from __future__ import annotations
@@ -151,3 +156,77 @@ REJECT_AT_OR_ABOVE = Severity.HIGH
 
 def limits_for(metric: str) -> tuple[SafetyLimit, ...]:
     return tuple(limit for limit in SAFETY_LIMITS if limit.metric == metric)
+
+
+# --- how each metric is collected ----------------------------------------------------
+
+
+@dataclass(frozen=True)
+class MetricDefinition:
+    """How one metric is read out of CloudWatch.
+
+    `statistic` collapses a window of datapoints into the single number the engine
+    compares. It is a property of what the metric means, not of any one experiment:
+    a peak is the right reading for concurrency and queue depth, a total for counts
+    of rejections, a mean for per-request cost.
+
+    `extra_dimensions` are dimensions this metric needs *in addition to* the one
+    that identifies the resource. They are (Name, Value) pairs in CloudWatch's own
+    casing. They live here rather than in the experiment manifest because they are a
+    property of the metric, not of the environment: the manifest's dimension list is
+    attached to a resource, and adding one there would wrongly narrow every other
+    metric on that same resource.
+    """
+
+    statistic: str
+    unit: str
+    extra_dimensions: tuple[tuple[str, str], ...] = ()
+
+
+#: Valid CloudWatch statistics, so a typo fails a test rather than an API call.
+STATISTICS = frozenset({"Average", "Maximum", "Minimum", "Sum", "SampleCount"})
+
+#: Units used by the metrics in scope. CloudWatch defines more; these are the ones
+#: our metrics report, and `ObservedMetric.unit` carries the value through.
+UNITS = frozenset({"Count", "Milliseconds", "Seconds"})
+
+#: One entry per distinct metric in METRICS_BY_RESOURCE_TYPE. The collector reads
+#: which metrics to fetch from that mapping and how to fetch each one from here;
+#: neither list may grow a metric the other does not have.
+METRIC_DEFINITIONS: dict[str, MetricDefinition] = {
+    # Lambda
+    "ConcurrentExecutions": MetricDefinition(statistic="Maximum", unit="Count"),
+    "Duration": MetricDefinition(statistic="Average", unit="Milliseconds"),
+    "Throttles": MetricDefinition(statistic="Sum", unit="Count"),
+    "Errors": MetricDefinition(statistic="Sum", unit="Count"),
+    # SQS
+    "ApproximateNumberOfMessagesVisible": MetricDefinition(statistic="Maximum", unit="Count"),
+    "ApproximateAgeOfOldestMessage": MetricDefinition(statistic="Maximum", unit="Seconds"),
+    # DynamoDB
+    "ConsumedWriteCapacityUnits": MetricDefinition(statistic="Sum", unit="Count"),
+    "ThrottledRequests": MetricDefinition(statistic="Sum", unit="Count"),
+    # SuccessfulRequestLatency is published per operation. Queried with TableName
+    # alone it returns no datapoints at all, silently, which is indistinguishable
+    # from a genuinely idle table. PutItem is the worker's only write.
+    "SuccessfulRequestLatency": MetricDefinition(
+        statistic="Average",
+        unit="Milliseconds",
+        extra_dimensions=(("Operation", "PutItem"),),
+    ),
+}
+
+
+def definition_for(metric: str) -> MetricDefinition:
+    """How to collect `metric`.
+
+    Raises rather than returning a default: a metric the engine asks for but cannot
+    describe is a gap in this table, and guessing a statistic would silently produce
+    a number that means something other than what the safety limits assume.
+    """
+    try:
+        return METRIC_DEFINITIONS[metric]
+    except KeyError:
+        known = ", ".join(sorted(METRIC_DEFINITIONS))
+        raise ValueError(
+            f"no collection definition for metric {metric!r}; defined metrics are: {known}"
+        ) from None
