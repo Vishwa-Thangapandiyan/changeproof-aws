@@ -1,3 +1,9 @@
+variable "offline" {
+  description = "Phase 0 mode: configure the provider with mock credentials so plan works with no AWS account. Set false only to actually apply, from the experiment driver."
+  type        = bool
+  default     = true
+}
+
 variable "region" {
   description = "AWS region. Used for provider configuration only; Phase 0 makes no AWS calls."
   type        = string

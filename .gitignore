@@ -39,3 +39,6 @@ crash.*.log
 # OS
 .DS_Store
 Thumbs.db
+
+# Lambda deployment package, built by scripts/build_lambda.sh
+terraform/build/

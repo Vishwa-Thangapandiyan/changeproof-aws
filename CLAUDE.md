@@ -25,9 +25,11 @@ spend. The repository today is the **brain** of ChangeProof; AWS becomes the bod
 Phase 1+.
 
 ```bash
-python scripts/demo.py              # full offline pipeline, no credentials needed
-python -m pytest backend/tests -q   # 118 tests at the Phase 0 handoff; keep it green
-pyright                             # must stay clean
+python scripts/demo.py                       # full offline pipeline, no credentials needed
+python -m pytest -q                          # 144 tests: 118 engine, 26 driver. Keep it green.
+pyright                                      # must stay clean (scoped to backend/)
+bash scripts/build_lambda.sh                 # package the demo app; no deps, no AWS
+python -m workload.driver.cli plan EXP-1     # describe an experiment, offline
 ```
 
 `scripts/demo.py` exits non-zero on a REJECT verdict, so it drops into CI/CD naturally.
@@ -58,7 +60,15 @@ terraform/                                    demo target infra
 terraform/fixtures/deployed-at-10.tfstate     committed on purpose: offline fixture
 scripts/demo.py                               end-to-end offline run
 scripts/generate_plan.sh                      offline terraform plan generation
+scripts/build_lambda.sh                       package workload/src into the Lambda zip
+workload/src/index.py                         the demo app: producer and consumer
+workload/driver/                              Phase 1 experiment driver (see its README)
+workload/tests/                               driver tests; no credentials needed
 ```
+
+`pyright` is scoped to `backend/` by `pyrightconfig.json`. The driver is deliberately
+outside that scope: it imports boto3, which is not a repository dependency and would
+fail `reportMissingImports`. Type-check it in an environment that has the SDK.
 
 Built: change representation, plan parsing, blast-radius traversal, deterministic
 prediction, test/reject routing, simulated observation, safety evaluation, prediction
@@ -321,14 +331,16 @@ The agreed end-to-end workflow, confirmed by the team:
 
 | Area | Owner | Scope |
 |---|---|---|
-| Test infrastructure and workload | Praanesh | Make the Terraform demo deployable; producer and worker Lambda code; baseline and change runs plus cleanup; publishes resource names and measurement timestamps |
+| Test infrastructure and workload | Praanesh | Delivered in `workload/`: deployable stack, producer and consumer, baseline and change runs, cleanup. Publishes resource names and measurement windows. Never yet applied to an account. |
 | Pipeline and function integration | Vishwa | Stage wiring, Step Functions integration, the pipeline contract between stages |
 | CloudWatch telemetry | unassigned | Metric collection for both runs, against the published names and timestamps |
 | Experiment records | Varun | S3 evidence artifacts and the DynamoDB experiment schema |
 
 The interface between infrastructure and telemetry is deliberately narrow: the workload
 run publishes **resource names and measurement timestamps**, and telemetry collection
-reads only those. Anything else is coupling.
+reads only those. Anything else is coupling. The concrete shape is the experiment
+manifest documented in `workload/README.md` sections 9 and 10; query `metricWindow`,
+not the raw timestamps.
 
 Neptune and Bedrock are explicitly post-core work, by team agreement and by the cost
 rule in section 6. Do not start either until the baseline-vs-change loop is working.

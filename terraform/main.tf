@@ -28,25 +28,28 @@ terraform {
   }
 }
 
-# Phase 0 offline configuration.
+# Provider configuration, in two modes.
 #
-# The skip_* flags and the placeholder credentials below exist so that
-# `terraform plan -refresh=false` can run with no AWS account, no credentials and
-# no network calls to AWS. Without them the provider calls STS GetCallerIdentity and
-# the EC2 instance metadata endpoint during configuration.
+# offline = true (the default) is the Phase 0 mode. The placeholder credentials and
+# skip_* flags exist so that `terraform plan -refresh=false` runs with no AWS
+# account, no credentials and no network calls to AWS. Without them the provider
+# calls STS GetCallerIdentity and the EC2 instance metadata endpoint during
+# configuration. In this mode an apply would fail, which is the intent.
 #
-# These are NOT a way to talk to AWS cheaply. They are a way to not talk to AWS at
-# all. Applying this configuration as written would fail, which is the intent.
+# offline = false is Phase 1. Every override becomes null, meaning "unset", so the
+# provider falls back to the normal credential chain and the stack can actually be
+# applied. Only the experiment driver sets this, and only behind an explicit
+# --authorize-aws-spend flag.
 provider "aws" {
   region = var.region
 
-  access_key = "mock_access_key"
-  secret_key = "mock_secret_key"
+  access_key = var.offline ? "mock_access_key" : null
+  secret_key = var.offline ? "mock_secret_key" : null
 
-  skip_credentials_validation = true
-  skip_requesting_account_id  = true
-  skip_metadata_api_check     = true
-  skip_region_validation      = true
+  skip_credentials_validation = var.offline
+  skip_requesting_account_id  = var.offline
+  skip_metadata_api_check     = var.offline
+  skip_region_validation      = var.offline
 
   default_tags {
     tags = {
@@ -54,6 +57,7 @@ provider "aws" {
       Environment = var.environment_suffix
       ManagedBy   = "terraform"
       Ephemeral   = "true"
+      Experiment  = var.environment_suffix
     }
   }
 }
