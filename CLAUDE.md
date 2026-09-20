@@ -18,7 +18,91 @@ Source of truth for design: `ChangeProof.md`, `ChangeProof_AWS_Services_Explaine
 `architecture/architecture.md`. Do not diverge from these without an explicit decision
 from the user.
 
-## 2. Architecture
+## 2. Current status — Phase 0 complete
+
+The offline verification pipeline runs end to end with zero AWS credentials and zero
+spend. The repository today is the **brain** of ChangeProof; AWS becomes the body in
+Phase 1+.
+
+```bash
+python scripts/demo.py              # full offline pipeline, no credentials needed
+python -m pytest backend/tests -q   # 118 tests at the Phase 0 handoff; keep it green
+pyright                             # must stay clean
+```
+
+`scripts/demo.py` exits non-zero on a REJECT verdict, so it drops into CI/CD naturally.
+Its expected shape today:
+
+```text
+4-resource blast radius
+  -> HIGH predicted reliability risk
+  -> simulated verification
+  -> 3 HIGH safety breaches
+  -> 25% of metrics inside the predicted band
+  -> REJECTED
+```
+
+Where things live:
+
+```text
+architecture/architecture.md                  design notes
+backend/lambda/changeproof/                   parser, graph, predict, compare, pipeline,
+                                              models, thresholds
+backend/lambda/changeproof/ports.py           Protocol per externally-backed capability
+backend/lambda/changeproof/adapters/local.py  Phase 0 implementations that actually run
+backend/lambda/changeproof/adapters/aws.py    Phase 1/2 placeholders; every method raises
+backend/lambda/changeproof/fixtures/          labelled offline plan, graph, telemetry
+backend/state_machine/workflow.json           Step Functions ASL definition
+backend/tests/                                unit tests plus test_no_aws.py
+terraform/                                    demo target infra
+terraform/fixtures/deployed-at-10.tfstate     committed on purpose: offline fixture
+scripts/demo.py                               end-to-end offline run
+scripts/generate_plan.sh                      offline terraform plan generation
+```
+
+Built: change representation, plan parsing, blast-radius traversal, deterministic
+prediction, test/reject routing, simulated observation, safety evaluation, prediction
+accuracy, verdict, deterministic explanation, evidence bundle on disk.
+
+Not built, and deliberately so: real test-environment provisioning, change application,
+synthetic workload generation, and every AWS-backed adapter (Neptune, CloudWatch,
+CloudTrail, X-Ray, S3, DynamoDB, Bedrock). Extend `adapters/aws.py` behind the existing
+`ports.py` Protocols rather than threading AWS calls through the pipeline.
+
+## 3. Decision rules (how a verdict is reached)
+
+Three rules the code already enforces. They must not drift.
+
+**Severity routing.** `CONCURRENCY_SEVERITY_BANDS` in `thresholds.py` maps a change to
+LOW / MEDIUM / HIGH / CRITICAL. LOW through HIGH are verified experimentally. CRITICAL
+is rejected *without* spending a test environment. The 10x demo change sits in HIGH on
+purpose, because verifying it is the entire point of the demo.
+
+**Prediction accuracy never decides the verdict.** These are two independent questions:
+
+- *Was the prediction accurate?* — the `PREDICTION_*` constants. Being wrong here costs
+  accuracy, which is recorded and feeds future calibration.
+- *Did the system actually become unsafe?* — `SAFETY_LIMITS`, applied to measured values
+  only.
+
+Only the second produces APPROVE/REJECT. A run reporting "25% of metrics inside the
+predicted band, 3 safety breaches, REJECTED" is coherent, not contradictory. Equally, a
+badly wrong prediction whose measurements stay inside every limit can still approve,
+with the miss recorded.
+
+**Simulated data announces itself.** Every fixture JSON carries a `$fixture` key stating
+in plain words that the numbers were hand-authored and were not measured by AWS, and the
+evidence bundle carries the same warning in its provenance block.
+`test_fixtures_are_labelled_as_fixtures` enforces it. Never strip a label to make output
+read more convincingly.
+
+The zero-AWS boundary is enforced by `backend/tests/test_no_aws.py`: no SDK import in the
+source tree, no SDK loaded on import, sockets blocked during a run, the pipeline running
+with AWS environment variables stripped, deferred stages raising, the declared
+deferred-stage list matching the stages that actually refuse, and fixtures labelled. Do
+not weaken these tests to make something pass.
+
+## 4. Architecture
 
 Core flow (each arrow is a discrete, inspectable stage):
 
@@ -53,6 +137,11 @@ Service responsibilities:
 | IAM | Hard boundary between ChangeProof and production |
 | Terraform | The input (proposed change) and the test-environment provisioner |
 
+These are not interchangeable; each answers a different question. CloudWatch says
+*what* changed, X-Ray says *where* it changed. CloudTrail records control-plane actions,
+CloudWatch records system behaviour. S3 holds large artifacts, DynamoDB holds queryable
+state. Lambda does one thing, Step Functions decides what happens next.
+
 ### Architectural rule (non-negotiable)
 
 **Bedrock is an explanation layer, NOT the source of truth.**
@@ -67,7 +156,7 @@ A model may never introduce a number, a metric, a dependency or a verdict that t
 deterministic layer did not already produce. If an explanation cannot be grounded in
 stored evidence, emit no explanation rather than an invented one.
 
-## 3. MVP scope
+## 5. MVP scope
 
 One change type, end-to-end, is worth more than ten partial features.
 
@@ -85,16 +174,8 @@ In scope now:
 8. Evidence storage
 9. Bedrock explanation
 
-Repository layout:
 
-```
-architecture/architecture.md     design notes
-backend/lambda/handler.py        Lambda entry point(s)
-backend/state_machine/workflow.json  Step Functions ASL definition
-terraform/                       demo target infra + test-env definitions
-```
-
-## 4. Cost constraints (hard limit: $100 AWS credits)
+## 6. Cost constraints (hard limit: $100 AWS credits)
 
 This is a binding design constraint, not a preference. Every decision is made
 local-first; AWS is contacted only when a stage genuinely cannot be proven without it.
@@ -126,7 +207,7 @@ Real plan JSON can be produced with zero AWS contact and zero cost:
 `-refresh=false` performs no AWS reads. The result is a genuine `update` action with
 real before/after values. The parser consumes real Terraform output, not a fixture.
 
-## 5. Build phases
+## 7. Build phases
 
 **Phase 0 (current) — local only, no AWS account involvement.**
 
@@ -183,7 +264,7 @@ Bedrock explanation, a handful of invocations.
 Do not start a phase before the previous one is working and tested, and never
 advance a phase without the user explicitly authorizing it.
 
-## 6. Coding expectations
+## 8. Coding expectations
 
 - **Python** for backend logic, standard library only in Phase 0. `boto3` is available
   in the Lambda runtime but must not appear on any Phase 0 code path.
@@ -201,7 +282,7 @@ advance a phase without the user explicitly authorizing it.
   comments, no defensive scaffolding that isn't exercised.
 - Keep dependencies minimal and justified. Adding one is a decision, not a detail.
 
-## 7. Security constraints
+## 9. Security constraints
 
 - **ChangeProof must never be able to touch production.** IAM is the boundary:
   least-privilege roles, test-environment scope only, no wildcard admin policies.
@@ -214,7 +295,7 @@ advance a phase without the user explicitly authorizing it.
 - Terraform state must never be committed. No `.tfstate`, no `.terraform/`.
 - Treat Terraform plan JSON as untrusted input: validate before acting on it.
 
-## 8. Do NOT do this yet
+## 10. Do NOT do this yet
 
 - **Do not provision Neptune or RDS under any circumstances.** See section 4.
 - **Do not deploy AWS resources.** No `terraform apply`, no `aws` CLI mutations, no
@@ -229,3 +310,30 @@ advance a phase without the user explicitly authorizing it.
   AWS observation.
 - Do not let Bedrock (or any model) originate a prediction, a metric or a decision.
 - Do not commit or push unless asked.
+
+## 11. Team and ownership
+
+The agreed end-to-end workflow, confirmed by the team:
+
+> Submit a Terraform change -> predict impact -> test baseline and changed
+> configurations in AWS -> collect actual metrics -> produce and store an
+> approve/reject verdict.
+
+| Area | Owner | Scope |
+|---|---|---|
+| Test infrastructure and workload | Praanesh | Make the Terraform demo deployable; producer and worker Lambda code; baseline and change runs plus cleanup; publishes resource names and measurement timestamps |
+| Pipeline and function integration | Vishwa | Stage wiring, Step Functions integration, the pipeline contract between stages |
+| CloudWatch telemetry | unassigned | Metric collection for both runs, against the published names and timestamps |
+| Experiment records | Varun | S3 evidence artifacts and the DynamoDB experiment schema |
+
+The interface between infrastructure and telemetry is deliberately narrow: the workload
+run publishes **resource names and measurement timestamps**, and telemetry collection
+reads only those. Anything else is coupling.
+
+Neptune and Bedrock are explicitly post-core work, by team agreement and by the cost
+rule in section 6. Do not start either until the baseline-vs-change loop is working.
+
+Open item: the DynamoDB table and attribute list is owed to the experiment-records
+owner. It should be derived from the evidence bundle the pipeline already produces
+(experiment id, phase, change summary, prediction, observed metrics, breaches,
+prediction accuracy, verdict) rather than designed independently.
