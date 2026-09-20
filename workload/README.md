@@ -22,6 +22,10 @@ changed     = driver.run_changed()         # -> RunRecord
 teardown    = driver.cleanup_experiment()  # -> TeardownReport
 ```
 
+`driver.run_both()` runs the two in the configured order and returns them by role,
+`(baseline, changed)`, whichever went first. Use it unless you need the two runs
+interleaved with something of your own.
+
 Every one returns a dataclass with `.to_dict()`. Nothing is communicated through logs.
 The CLI wraps the same four calls and writes the combined manifest to
 `.changeproof/experiments/<id>/experiment-manifest.json`.
@@ -90,6 +94,10 @@ If any of those fails the run aborts rather than proceeding. A two-variable
 experiment proves nothing, and a silently drifted stack is the likeliest way to get
 one.
 
+The same guardrail applies in either direction, so `--order changed-first`
+provisions at 100, measures, then applies 10 and measures again. See *Run order*
+below.
+
 ## 5. The producer (`workload/src/index.py`)
 
 Invoked once per attempted order with `{"runId", "seq", "payloadBytes"}`. Sends one
@@ -130,6 +138,7 @@ Held identical across both runs:
 | Cold starts | Warm-up attempts precede the measurement window and are excluded from it |
 | Starting queue depth | Drain gate: the next run does not start until the queue is empty |
 | Infrastructure | Same stack, same queue, same table, same region |
+| Everything but one attribute | Plan guardrail, in whichever direction the change is applied |
 
 **Attempts are the controlled quantity, not successes.** Under the baseline most
 invocations are rejected by the cap; under the change most succeed. That difference
@@ -223,12 +232,35 @@ than assumes: an experiment that cannot be torn down is a recurring bill.
 
 ---
 
+## Run order
+
+`--order baseline-first` (default) measures 10 then 100. `--order changed-first`
+provisions at 100 and measures that first.
+
+Order matters because the second run inherits whatever drifted during the first:
+account-level warmth, a noisy neighbour on shared infrastructure, time of day. A
+single experiment cannot separate that drift from the change itself. Running the
+same experiment twice in opposite orders can:
+
+```bash
+python -m workload.driver.cli run EXP-142-a --order baseline-first --authorize-aws-spend
+python -m workload.driver.cli run EXP-142-b --order changed-first  --authorize-aws-spend
+```
+
+If both reach the same verdict, drift is not driving it. If they disagree, the
+evidence is weaker than a single run makes it look, and `comparability.order` in each
+manifest records which way round that run went.
+
+`run_both()` always returns `(baseline, changed)` by role, so nothing downstream has
+to branch on the order.
+
 ## Running it
 
 ```bash
 bash scripts/build_lambda.sh                              # one file, no deps, no AWS
 python -m workload.driver.cli plan EXP-142                # offline; describes the run
 python -m workload.driver.cli run EXP-142 --authorize-aws-spend
+python -m workload.driver.cli run EXP-142 --order changed-first --authorize-aws-spend
 python -m workload.driver.cli cleanup EXP-142 --authorize-aws-spend
 ```
 
@@ -245,9 +277,9 @@ Tests: `python -m pytest workload/tests -q` — no credentials, no Terraform CLI
 
 Stated because they affect how much the evidence is worth:
 
-- **Run order is fixed** (baseline first). Account-level warmth and time-of-day drift
-  are therefore not cancelled out. A control experiment running changed-first would
-  quantify it; the driver does not do this yet.
+- **A single experiment does not cancel drift.** Order is controllable, but one run
+  in one order cannot separate the change from whatever drifted while it ran. Two
+  experiments in opposite orders can; nothing forces you to do that.
 - **The load generator runs on a laptop.** Client-side network jitter affects the
   achieved attempt rate, though not the Lambda-side metrics. `comparability.attemptDeltaPct`
   reports the difference between the two runs; treat anything above a couple of
@@ -262,5 +294,5 @@ Stated because they affect how much the evidence is worth:
 - Deploying into a separate AWS account (currently same-account isolation by name and
   tag only; IAM boundary work is the security owner's)
 - Running the generator inside AWS rather than from a laptop
-- Randomised or repeated run order
+- Repeating an experiment automatically in both orders and reconciling the verdicts
 - Any change type other than Lambda reserved concurrency

@@ -278,7 +278,7 @@ def comparability(baseline: RunRecord, changed: RunRecord) -> dict[str, Any]:
         "bothRunsDrained": baseline.drained and changed.drained,
         "configurationDeltaKeys": differing,
         "singleVariable": len(differing) == 1,
-        "order": [baseline.label, changed.label],
+        "order": [record.label for record in sorted((baseline, changed), key=lambda run: run.started_at)],
         "windowSecondsBaseline": epoch(baseline.window_end) - epoch(baseline.window_start),
         "windowSecondsChanged": epoch(changed.window_end) - epoch(changed.window_start),
     }

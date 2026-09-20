@@ -15,6 +15,12 @@ Sequence:
 
 Both runs use the same environment, the same queue and the same table. Tearing down
 and rebuilding between runs would introduce cold infrastructure as a second variable.
+
+`order` controls which configuration is measured first. Baseline first is the natural
+reading, but it confounds the change with anything that drifts over the life of the
+experiment: account-level warmth, a noisy neighbour, time of day. Running the same
+experiment a second time with `order="changed-first"` and comparing the two verdicts
+is how that drift is quantified rather than assumed away.
 """
 
 from __future__ import annotations
@@ -62,6 +68,7 @@ class ExperimentDriver:
     baseline_concurrency: int = 10
     changed_concurrency: int = 100
     worker_concurrency: int = 5
+    order: str = "baseline-first"
     repo_root: Path = field(default_factory=lambda: Path(__file__).resolve().parents[2])
     settle_seconds: int = SETTLE_SECONDS
     drain_timeout_seconds: int = DRAIN_TIMEOUT_SECONDS
@@ -73,13 +80,13 @@ class ExperimentDriver:
     # --- lifecycle -------------------------------------------------------------------
 
     def create_experiment(self) -> ExperimentEnvironment:
-        """Provision the stack at the baseline configuration."""
+        """Provision the stack at whichever configuration is measured first."""
         source = self.repo_root / "terraform"
         working = self.repo_root / ".changeproof" / "experiments" / self.experiment_id / "terraform"
 
         terraform = Terraform.prepare(source, working)
         terraform.init()
-        terraform.apply(self._variables(self.baseline_concurrency))
+        terraform.apply(self._variables(self.first_concurrency))
 
         outputs = terraform.outputs()
         self._terraform = terraform
@@ -91,20 +98,51 @@ class ExperimentDriver:
             state_path=str(terraform.state_path),
             resources=_identities(outputs),
             configuration={
-                "reserved_concurrency": self.baseline_concurrency,
+                "reserved_concurrency": self.first_concurrency,
                 "worker_concurrency": self.worker_concurrency,
             },
         )
         return self.environment
 
+    @property
+    def first_concurrency(self) -> int:
+        """The configuration the stack is provisioned at, and measured at first."""
+        return self.changed_concurrency if self.order == "changed-first" else self.baseline_concurrency
+
     def run_baseline(self) -> RunRecord:
-        """Measure the stack as it stands today."""
-        return self._run("baseline", self.baseline_concurrency, apply_change=False)
+        """Measure the stack at the current configuration.
+
+        Applies first only when the baseline is the *second* run, which is the case
+        under `order="changed-first"`.
+        """
+        return self._run(
+            "baseline",
+            self.baseline_concurrency,
+            apply_change=self.order == "changed-first",
+        )
 
     def run_changed(self) -> RunRecord:
-        """Apply the proposed change, then measure the same workload again."""
-        record = self._run("changed", self.changed_concurrency, apply_change=True)
-        return record
+        """Measure the stack at the proposed configuration."""
+        return self._run(
+            "changed",
+            self.changed_concurrency,
+            apply_change=self.order != "changed-first",
+        )
+
+    def run_both(self) -> tuple[RunRecord, RunRecord]:
+        """Both runs, executed in the configured order, returned by role.
+
+        The tuple is always (baseline, changed) whatever the execution order, so a
+        caller comparing them never has to care which ran first. `started_at` on each
+        record, and `comparability(...)["order"]`, carry that.
+        """
+        if self.order == "changed-first":
+            changed = self.run_changed()
+            baseline = self.run_baseline()
+        else:
+            baseline = self.run_baseline()
+            changed = self.run_changed()
+        return baseline, changed
 
     def cleanup_experiment(self) -> TeardownReport:
         """Destroy everything, and prove it.
@@ -156,9 +194,10 @@ class ExperimentDriver:
             plan = terraform.plan_json(variables)
             assert_single_attribute_change(plan, CHANGE_ADDRESS, CHANGE_ATTRIBUTE)
             terraform.apply(variables)
+            before = _before_value(plan, CHANGE_ADDRESS, CHANGE_ATTRIBUTE)
             notes.append(
                 f"applied {CHANGE_ADDRESS}.{CHANGE_ATTRIBUTE}: "
-                f"{self.baseline_concurrency} -> {concurrency} (single-attribute update, verified against the plan)"
+                f"{before} -> {concurrency} (single-attribute update, verified against the plan)"
             )
             # A concurrency change takes effect immediately, but the settle period
             # keeps the apply itself out of the measurement window.
@@ -293,6 +332,13 @@ def _identities(outputs: dict[str, Any]) -> tuple[ResourceIdentity, ...]:
             arn=outputs.get("orders_table_arn"),
         ),
     )
+
+
+def _before_value(plan: dict[str, Any], address: str, attribute: str) -> Any:
+    for change in plan.get("resource_changes", []):
+        if change["address"] == address:
+            return (change["change"].get("before") or {}).get(attribute)
+    return None
 
 
 def _floor_minute(moment: datetime) -> datetime:

@@ -243,3 +243,61 @@ def test_running_before_provisioning_is_an_error_not_a_guess():
 
     with pytest.raises(RuntimeError, match="create_experiment"):
         driver.run_baseline()
+
+
+# --- run order, the control for drift over the life of the experiment ----------------
+
+
+def test_baseline_first_is_the_default():
+    driver, _, _ = driver_with_fakes()
+
+    assert driver.order == "baseline-first"
+    assert driver.first_concurrency == 10
+
+
+def test_changed_first_provisions_at_the_changed_configuration():
+    """Whichever configuration is measured first is the one the stack is built at."""
+    driver, _, _ = driver_with_fakes(order="changed-first")
+
+    assert driver.first_concurrency == 100
+
+
+def test_changed_first_moves_the_apply_onto_the_baseline_run():
+    driver, terraform, _ = driver_with_fakes(order="changed-first")
+    terraform.plan_response["resource_changes"][0]["change"] = {
+        "actions": ["update"],
+        "before": {CHANGE_ATTRIBUTE: 100},
+        "after": {CHANGE_ATTRIBUTE: 10},
+    }
+
+    baseline, changed = driver.run_both()
+
+    assert len(terraform.applied) == 1
+    assert terraform.applied[0]["reserved_concurrency"] == 10
+    assert any("100 -> 10" in note for note in baseline.notes)
+    assert changed.notes == ()
+
+
+def test_run_both_returns_records_by_role_but_reports_execution_order():
+    """The caller compares baseline against changed; the manifest says which ran first."""
+    driver, terraform, _ = driver_with_fakes(order="changed-first")
+    terraform.plan_response["resource_changes"][0]["change"] = {
+        "actions": ["update"],
+        "before": {CHANGE_ATTRIBUTE: 100},
+        "after": {CHANGE_ATTRIBUTE: 10},
+    }
+
+    baseline, changed = driver.run_both()
+
+    assert baseline.label == "baseline" and baseline.configuration["reserved_concurrency"] == 10
+    assert changed.label == "changed" and changed.configuration["reserved_concurrency"] == 100
+    assert changed.started_at <= baseline.started_at
+    assert comparability(baseline, changed)["order"] == ["changed", "baseline"]
+
+
+def test_baseline_first_reports_its_own_execution_order():
+    driver, _, _ = driver_with_fakes()
+
+    baseline, changed = driver.run_both()
+
+    assert comparability(baseline, changed)["order"] == ["baseline", "changed"]

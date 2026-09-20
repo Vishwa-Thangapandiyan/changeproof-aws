@@ -42,6 +42,7 @@ def _driver(args: argparse.Namespace) -> ExperimentDriver:
         baseline_concurrency=args.baseline_concurrency,
         changed_concurrency=args.changed_concurrency,
         worker_concurrency=args.worker_concurrency,
+        order=args.order,
         repo_root=REPO_ROOT,
         settle_seconds=args.settle,
     )
@@ -55,6 +56,11 @@ def command_plan(args: argparse.Namespace) -> int:
     result in the evidence bundle.
     """
     spec = _spec(args)
+    driver = _driver(args)
+    changed_first = args.order == "changed-first"
+    first_label, second_label = ("run_changed", "run_baseline") if changed_first else ("run_baseline", "run_changed")
+    second_concurrency = args.baseline_concurrency if changed_first else args.changed_concurrency
+
     document = {
         "experimentId": args.experiment_id,
         "region": args.region,
@@ -67,12 +73,12 @@ def command_plan(args: argparse.Namespace) -> int:
         "workload": spec.to_dict(),
         "workloadFingerprint": spec.fingerprint(),
         "plannedActions": [
-            "create_experiment: terraform apply at reserved_concurrency="
-            f"{args.baseline_concurrency}",
-            f"run_baseline: warm up, drive {spec.attempts} attempts over {spec.duration_seconds}s, drain",
-            f"run_changed: apply {CHANGE_ATTRIBUTE}={args.changed_concurrency}, repeat the identical workload",
+            f"create_experiment: terraform apply at reserved_concurrency={driver.first_concurrency}",
+            f"{first_label}: warm up, drive {spec.attempts} attempts over {spec.duration_seconds}s, drain",
+            f"{second_label}: apply {CHANGE_ATTRIBUTE}={second_concurrency}, repeat the identical workload",
             "cleanup_experiment: terraform destroy and verify the state is empty",
         ],
+        "order": args.order,
         "estimatedWallClockSeconds": 2 * (spec.duration_seconds + args.settle * 2) + 240,
         "note": "No AWS call was made. Run with --authorize-aws-spend to execute.",
     }
@@ -94,10 +100,8 @@ def command_run(args: argparse.Namespace) -> int:
         environment = driver.create_experiment()
         manifest["environment"] = environment.to_dict()
 
-        baseline = driver.run_baseline()
+        baseline, changed = driver.run_both()
         manifest["baseline"] = baseline.to_dict()
-
-        changed = driver.run_changed()
         manifest["changed"] = changed.to_dict()
         manifest["comparability"] = comparability(baseline, changed)
     except Exception as error:
@@ -161,6 +165,13 @@ def build_parser() -> argparse.ArgumentParser:
         target.add_argument("--changed-concurrency", type=int, default=100)
         target.add_argument("--worker-concurrency", type=int, default=5)
         target.add_argument("--settle", type=int, default=60, help="idle seconds between runs")
+        target.add_argument(
+            "--order",
+            choices=["baseline-first", "changed-first"],
+            default="baseline-first",
+            help="which configuration is measured first. Re-running an experiment changed-first "
+            "quantifies drift over the life of the experiment instead of assuming it away.",
+        )
 
     plan = sub.add_parser("plan", help="describe the experiment; makes no AWS call")
     plan.add_argument("experiment_id", nargs="?", default="EXP-PLAN")
