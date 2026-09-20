@@ -42,3 +42,5 @@ Thumbs.db
 
 # Lambda deployment package, built by scripts/build_lambda.sh
 terraform/build/
+
+build/
