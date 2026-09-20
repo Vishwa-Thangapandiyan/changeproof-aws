@@ -30,7 +30,7 @@ def test_sdk_use_is_confined_to_the_allowlist():
     pattern = re.compile(r"^\s*(?:import|from)\s+(" + "|".join(SDK_MODULES) + r")\b", re.MULTILINE)
 
     offenders = sorted(
-        str(path.relative_to(WORKLOAD_ROOT))
+        path.relative_to(WORKLOAD_ROOT).as_posix()
         for path in _sources()
         if pattern.search(path.read_text(encoding="utf-8"))
     )
